@@ -1,0 +1,12 @@
+{
+  "name": "Villa Caterina",
+  "short_name": "Villa Caterina",
+  "description": "Gestione appartamenti Villa Caterina",
+  "start_url": "/villacaterina/",
+  "display": "standalone",
+  "background_color": "#1a0533",
+  "theme_color": "#1a0533",
+  "icons": [
+    { "src": "/villacaterina/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
