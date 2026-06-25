@@ -29,7 +29,7 @@ const MAINT_TYPES = [
 const MONTHS       = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const MONTHS_SHORT = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
 const DAYS_SHORT   = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
-const SK_BOOKINGS="vcaterina-bookings", SK_MAINTS="vcaterina-maints", SK_NAMES="vcaterina-aptnames", SK_TAX="vcaterina-taxrate";
+const SK_BOOKINGS="vcaterina-bookings", SK_MAINTS="vcaterina-maints", SK_NAMES="vcaterina-aptnames", SK_TAX="vcaterina-taxrate", SK_APIKEY="vcaterina-apikey";
 
 /* ── localStorage shim (sostituisce window.storage) ── */
 const ls = {
@@ -108,6 +108,7 @@ export default function App() {
   const [listFilter, setListFilter]   = useState("all");
   const [aiLoading, setAiLoading]     = useState(false);
   const [aiError, setAiError]         = useState(null);
+  const [apiKey, setApiKey]           = useState("");
   const fileInputRef = useRef(null);
 
   function toggleSelApt(id) {
@@ -125,11 +126,12 @@ export default function App() {
 
   function loadData() {
     try {
-      const bR=ls.get(SK_BOOKINGS); const mR=ls.get(SK_MAINTS); const nR=ls.get(SK_NAMES); const tR=ls.get(SK_TAX);
+      const bR=ls.get(SK_BOOKINGS); const mR=ls.get(SK_MAINTS); const nR=ls.get(SK_NAMES); const tR=ls.get(SK_TAX); const kR=ls.get(SK_APIKEY);
       if(bR?.value) setBookings(JSON.parse(bR.value));
       if(mR?.value) setMaints(JSON.parse(mR.value));
       if(nR?.value){ const nm=JSON.parse(nR.value); setAptNames(nm); setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:nm[a.id]||a.name}))); }
       if(tR?.value){ const p=JSON.parse(tR.value); setTaxRate(p.tax||0); setCostRate(p.cost||0); }
+      if(kR?.value) setApiKey(kR.value);
     } catch(e){}
     finally{ setLoading(false); }
   }
@@ -170,6 +172,8 @@ export default function App() {
 
   async function handleFileUpload(e) {
     const file = e.target.files?.[0]; if (!file) return;
+    const key = apiKey.trim();
+    if (!key) { setAiError("Inserisci la chiave API nelle Impostazioni ⚙️ per usare questa funzione."); return; }
     setAiError(null); setAiLoading(true);
     try {
       const base64 = await new Promise((res, rej) => { const reader = new FileReader(); reader.onload=()=>res(reader.result.split(",")[1]); reader.onerror=()=>rej(new Error("Lettura file fallita")); reader.readAsDataURL(file); });
@@ -179,7 +183,7 @@ export default function App() {
       const platIds = PLATFORMS.map(p=>p.id).join("|");
       const aptIds  = apts.map(a=>a.id).join("|");
       const prompt  = `Questo documento è una conferma di prenotazione affitto breve. Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun markdown. Formato esatto:\n{"guest":"nome cognome","checkin":"YYYY-MM-DD","checkout":"YYYY-MM-DD","price":0,"guests":0,"platform":"uno di: ${platIds}","apt":"uno di: ${aptIds} oppure stringa vuota","notes":""}\nSe un dato non è leggibile usa stringa vuota o 0. Le date devono essere in formato YYYY-MM-DD.`;
-      const res = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:500, messages:[{ role:"user", content:[ contentBlock, { type:"text", text:prompt } ] }] }) });
+      const res = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"}, body:JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:500, messages:[{ role:"user", content:[ contentBlock, { type:"text", text:prompt } ] }] }) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error.message||"Errore API");
@@ -195,6 +199,7 @@ export default function App() {
     const nm = Object.fromEntries(DEFAULT_APARTMENTS.map(a=>[a.id,aptNames[a.id]||a.name]));
     setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:nm[a.id]})));
     ls.set(SK_NAMES,JSON.stringify(nm)); saveTax(taxRate,costRate);
+    if(apiKey.trim()) ls.set(SK_APIKEY, apiKey.trim());
     showToast("Salvato"); setView("calendar");
   }
   function importFromText(text){
@@ -434,6 +439,12 @@ export default function App() {
             <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginTop:16,marginBottom:10}}>Aliquote netto</div>
             <div style={{display:"flex",gap:8,marginBottom:6}}><div style={{flex:1}}><div style={{fontSize:10,color:"#999",marginBottom:5}}>Tasse (%)</div><input type="number" value={taxRate} onChange={e=>setTaxRate(e.target.value)} placeholder="21" min="0" max="100" style={S.input}/></div><div style={{flex:1}}><div style={{fontSize:10,color:"#999",marginBottom:5}}>Altri costi (%)</div><input type="number" value={costRate} onChange={e=>setCostRate(e.target.value)} placeholder="10" min="0" max="100" style={S.input}/></div></div>
             <div style={{padding:"9px 12px",background:"rgba(126,200,227,0.08)",borderRadius:8,fontSize:12,color:"#999",marginBottom:18}}>Netto: {100-(parseFloat(taxRate)||0)-(parseFloat(costRate)||0)}%</div>
+            <div style={{background:"rgba(126,200,227,0.07)",border:"1px solid rgba(126,200,227,0.25)",borderRadius:11,padding:14,marginBottom:18}}>
+              <div style={{fontSize:12,color:"#7EC8E3",fontWeight:"bold",marginBottom:4}}>🤖 Chiave API Anthropic</div>
+              <div style={{fontSize:11,color:"#999",marginBottom:10}}>Necessaria per caricare prenotazioni da foto/PDF. Ottienila su console.anthropic.com</div>
+              <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="sk-ant-..." style={{...S.input,fontFamily:"monospace",fontSize:12}}/>
+              {apiKey&&<div style={{fontSize:11,color:"#4CAF8A",marginTop:4}}>✓ Chiave inserita — verrà salvata con "Salva"</div>}
+            </div>
             <div style={{display:"flex",gap:8}}><button onClick={()=>setView("calendar")} style={{...S.btn("#1a1a2e","#888"),flex:1,padding:"12px 0"}}>Annulla</button><button onClick={saveSettings} style={{...S.btn("#1a3a2a","#4CAF8A"),flex:2,padding:"12px 0",fontWeight:"bold"}}>Salva</button></div>
           </div>
         )}
