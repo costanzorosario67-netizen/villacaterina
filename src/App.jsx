@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { db, ref, set, get, onValue } from "./firebase";
 
 const DEFAULT_APARTMENTS = [
   { id: "zaffiro",      name: "Zaffiro",        color: "#4A9FD4", emoji: "💙" },
@@ -122,22 +123,34 @@ export default function App() {
     setStatsApts(prev => { const wo=prev.filter(x=>x!=="all"); if(wo.includes(id)){ const n=wo.filter(x=>x!==id); return n.length===0?["all"]:n; } return [...wo,id]; });
   }
 
-  useEffect(() => { loadData(); const t=setInterval(loadData,30000); return ()=>clearInterval(t); }, []);
+  useEffect(() => {
+    // Carica API key da localStorage (locale, non condivisa)
+    const kR = ls.get(SK_APIKEY);
+    if(kR?.value) setApiKey(kR.value);
+    // Ascolta Firebase in tempo reale
+    const unsubB = onValue(ref(db,"bookings"), snap => { if(snap.exists()) setBookings(Object.values(snap.val())); else setBookings([]); });
+    const unsubM = onValue(ref(db,"maints"),   snap => { if(snap.exists()) setMaints(Object.values(snap.val()));   else setMaints([]); });
+    const unsubN = onValue(ref(db,"aptNames"), snap => { if(snap.exists()){ const nm=snap.val(); setAptNames(nm); setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:nm[a.id]||a.name}))); }});
+    const unsubT = onValue(ref(db,"taxRate"),  snap => { if(snap.exists()){ const p=snap.val(); setTaxRate(p.tax||0); setCostRate(p.cost||0); }});
+    setLoading(false);
+    return () => { unsubB(); unsubM(); unsubN(); unsubT(); };
+  }, []);
 
-  function loadData() {
-    try {
-      const bR=ls.get(SK_BOOKINGS); const mR=ls.get(SK_MAINTS); const nR=ls.get(SK_NAMES); const tR=ls.get(SK_TAX); const kR=ls.get(SK_APIKEY);
-      if(bR?.value) setBookings(JSON.parse(bR.value));
-      if(mR?.value) setMaints(JSON.parse(mR.value));
-      if(nR?.value){ const nm=JSON.parse(nR.value); setAptNames(nm); setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:nm[a.id]||a.name}))); }
-      if(tR?.value){ const p=JSON.parse(tR.value); setTaxRate(p.tax||0); setCostRate(p.cost||0); }
-      if(kR?.value) setApiKey(kR.value);
-    } catch(e){}
-    finally{ setLoading(false); }
+  async function saveBookings(nb){
+    setSyncing(true);
+    try{
+      const obj = Object.fromEntries(nb.map(b=>[b.id, b]));
+      await set(ref(db,"bookings"), nb.length>0?obj:null);
+    }catch(e){ showToast("Errore sync","error"); }
+    finally{ setSyncing(false); }
   }
-  function saveBookings(nb){ setSyncing(true); try{ ls.set(SK_BOOKINGS,JSON.stringify(nb)); }catch(e){ showToast("Errore sync","error"); }finally{ setSyncing(false); } }
-  function saveMaints(nm){ try{ ls.set(SK_MAINTS,JSON.stringify(nm)); }catch(e){} }
-  function saveTax(t,c){ try{ ls.set(SK_TAX,JSON.stringify({tax:t,cost:c})); }catch(e){} }
+  async function saveMaints(nm){
+    try{
+      const obj = Object.fromEntries(nm.map(m=>[m.id, m]));
+      await set(ref(db,"maints"), nm.length>0?obj:null);
+    }catch(e){}
+  }
+  async function saveTax(t,c){ try{ await set(ref(db,"taxRate"),{tax:t,cost:c}); }catch(e){} }
 
   function showToast(msg, type="success"){ setToast({msg,type}); setTimeout(()=>setToast(null),2800); }
 
@@ -195,14 +208,15 @@ export default function App() {
     finally { setAiLoading(false); if (fileInputRef.current) fileInputRef.current.value = ""; }
   }
 
-  function saveSettings(){
+  async function saveSettings(){
     const nm = Object.fromEntries(DEFAULT_APARTMENTS.map(a=>[a.id,aptNames[a.id]||a.name]));
     setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:nm[a.id]})));
-    ls.set(SK_NAMES,JSON.stringify(nm)); saveTax(taxRate,costRate);
+    try{ await set(ref(db,"aptNames"), nm); }catch(e){}
+    await saveTax(taxRate,costRate);
     if(apiKey.trim()) ls.set(SK_APIKEY, apiKey.trim());
     showToast("Salvato"); setView("calendar");
   }
-  function importFromText(text){
+  async function importFromText(text){
     try{
       const data=JSON.parse(text.trim());
       if(!data.bookings||!data.maints) throw new Error();
@@ -210,9 +224,9 @@ export default function App() {
       if(data.aptNames){ setAptNames(data.aptNames); setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:data.aptNames[a.id]||a.name}))); }
       if(data.taxRate!==undefined) setTaxRate(data.taxRate);
       if(data.costRate!==undefined) setCostRate(data.costRate);
-      saveBookings(data.bookings); saveMaints(data.maints);
-      if(data.aptNames) ls.set(SK_NAMES,JSON.stringify(data.aptNames));
-      if(data.taxRate!==undefined) saveTax(data.taxRate,data.costRate||0);
+      await saveBookings(data.bookings); await saveMaints(data.maints);
+      if(data.aptNames) await set(ref(db,"aptNames"), data.aptNames).catch(()=>{});
+      if(data.taxRate!==undefined) await saveTax(data.taxRate, data.costRate||0);
       setImportError(null); setImportText(""); showToast("Dati ripristinati ✓"); setView("calendar");
     } catch{ setImportError("Testo non valido"); showToast("Errore importazione","error"); }
   }
