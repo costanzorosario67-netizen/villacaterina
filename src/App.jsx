@@ -185,7 +185,7 @@ export default function App() {
 
   async function handleFileUpload(e) {
     const file = e.target.files?.[0]; if (!file) return;
-    const key = apiKey.trim();
+    const key = apiKey.trim() || localStorage.getItem(SK_APIKEY) || "";
     if (!key) { setAiError("Inserisci la chiave API nelle Impostazioni ⚙️ per usare questa funzione."); return; }
     setAiError(null); setAiLoading(true);
     try {
@@ -197,7 +197,10 @@ export default function App() {
       const aptIds  = apts.map(a=>a.id).join("|");
       const prompt  = `Questo documento è una conferma di prenotazione affitto breve. Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun markdown. Formato esatto:\n{"guest":"nome cognome","checkin":"YYYY-MM-DD","checkout":"YYYY-MM-DD","price":0,"guests":0,"platform":"uno di: ${platIds}","apt":"uno di: ${aptIds} oppure stringa vuota","notes":""}\nSe un dato non è leggibile usa stringa vuota o 0. Le date devono essere in formato YYYY-MM-DD.`;
       const res = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"}, body:JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:500, messages:[{ role:"user", content:[ contentBlock, { type:"text", text:prompt } ] }] }) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(()=>({}));
+        throw new Error(`HTTP ${res.status}: ${errData?.error?.message||"Errore API"}`);
+      }
       const data = await res.json();
       if (data.error) throw new Error(data.error.message||"Errore API");
       const rawText = (data.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("").trim();
