@@ -30,7 +30,7 @@ const MAINT_TYPES = [
 const MONTHS       = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const MONTHS_SHORT = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
 const DAYS_SHORT   = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
-const SK_BOOKINGS="vcaterina-bookings", SK_MAINTS="vcaterina-maints", SK_NAMES="vcaterina-aptnames", SK_TAX="vcaterina-taxrate", SK_APIKEY="vcaterina-apikey";
+const SK_BOOKINGS="vcaterina-bookings", SK_MAINTS="vcaterina-maints", SK_NAMES="vcaterina-aptnames", SK_TAX="vcaterina-taxrate", SK_APIKEY="vcaterina-apikey", SK_PIN="vcaterina-pin";
 
 /* ── localStorage shim (sostituisce window.storage) ── */
 const ls = {
@@ -110,6 +110,12 @@ export default function App() {
   const [aiLoading, setAiLoading]     = useState(false);
   const [aiError, setAiError]         = useState(null);
   const [apiKey, setApiKey]           = useState("");
+  const [pinInput, setPinInput]       = useState("");
+  const [pinError, setPinError]       = useState(false);
+  const [canEdit, setCanEdit]         = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [savedPin, setSavedPin]       = useState("");
+  const [newPin, setNewPin]           = useState("");
   const fileInputRef = useRef(null);
 
   function toggleSelApt(id) {
@@ -124,9 +130,13 @@ export default function App() {
   }
 
   useEffect(() => {
-    // Carica API key da localStorage (locale, non condivisa)
+    // Carica API key e PIN da localStorage (locale, non condivisi)
     const kR = ls.get(SK_APIKEY);
     if(kR?.value) setApiKey(kR.value);
+    const pR = ls.get(SK_PIN);
+    if(pR?.value) setSavedPin(pR.value);
+    // Se non c'è PIN impostato, si può modificare liberamente
+    if(!pR?.value) setCanEdit(true);
     // Ascolta Firebase in tempo reale
     const unsubB = onValue(ref(db,"bookings"), snap => { if(snap.exists()) setBookings(Object.values(snap.val())); else setBookings([]); });
     const unsubM = onValue(ref(db,"maints"),   snap => { if(snap.exists()) setMaints(Object.values(snap.val()));   else setMaints([]); });
@@ -166,22 +176,24 @@ export default function App() {
   const fmtEur   = v => hideAmounts?"••••":(Math.round(v*100)/100).toLocaleString("it-IT",{minimumFractionDigits:2,maximumFractionDigits:2});
 
   function handleSave(){
+    if(!canEdit){ setShowPinModal(true); return; }
     if(!form.guest.trim()||!form.checkin||!form.checkout){ showToast("Compila ospite, check-in e check-out","error"); return; }
     if(parseDate(form.checkout)<=parseDate(form.checkin)){ showToast("Checkout deve essere dopo check-in","error"); return; }
     const nb = editId!==null ? bookings.map(b=>b.id===editId?{...b,...form,id:editId}:b) : [...bookings,{...form,id:Date.now()}];
     showToast(editId!==null?"Aggiornata":"Salvata"); setEditId(null);
     setBookings(nb); saveBookings(nb); setForm(emptyForm()); setView("list");
   }
-  function handleEdit(b){ setForm({apt:b.apt,guest:b.guest,checkin:b.checkin,checkout:b.checkout,price:b.price,guests:b.guests||"",notes:b.notes||"",platform:b.platform||"diretto",status:b.status||"confirmed"}); setEditId(b.id); setView("add"); }
-  function handleDel(id){ const nb=bookings.filter(b=>b.id!==id); setBookings(nb); saveBookings(nb); setDelId(null); showToast("Eliminata"); }
+  function handleEdit(b){ if(!canEdit){ setShowPinModal(true); return; } setForm({apt:b.apt,guest:b.guest,checkin:b.checkin,checkout:b.checkout,price:b.price,guests:b.guests||"",notes:b.notes||"",platform:b.platform||"diretto",status:b.status||"confirmed"}); setEditId(b.id); setView("add"); }
+  function handleDel(id){ if(!canEdit){ setShowPinModal(true); return; } const nb=bookings.filter(b=>b.id!==id); setBookings(nb); saveBookings(nb); setDelId(null); showToast("Eliminata"); }
   function handleMSave(){
+    if(!canEdit){ setShowPinModal(true); return; }
     if(!mForm.date){ showToast("Inserisci la data","error"); return; }
     const nm = editMId!==null ? maints.map(m=>m.id===editMId?{...m,...mForm,id:editMId}:m) : [...maints,{...mForm,id:Date.now()}];
     showToast(editMId!==null?"Aggiornata":"Salvata"); setEditMId(null);
     setMaints(nm); saveMaints(nm); setMForm(emptyMForm()); setView("list");
   }
-  function handleMEdit(m){ setMForm({apt:m.apt,type:m.type,date:m.date,notes:m.notes||"",cost:m.cost||""}); setEditMId(m.id); setView("addMaint"); }
-  function handleMDel(id){ const nm=maints.filter(m=>m.id!==id); setMaints(nm); saveMaints(nm); setDelMId(null); showToast("Eliminata"); }
+  function handleMEdit(m){ if(!canEdit){ setShowPinModal(true); return; } setMForm({apt:m.apt,type:m.type,date:m.date,notes:m.notes||"",cost:m.cost||""}); setEditMId(m.id); setView("addMaint"); }
+  function handleMDel(id){ if(!canEdit){ setShowPinModal(true); return; } const nm=maints.filter(m=>m.id!==id); setMaints(nm); saveMaints(nm); setDelMId(null); showToast("Eliminata"); }
 
   async function handleFileUpload(e) {
     const file = e.target.files?.[0]; if (!file) return;
@@ -217,7 +229,13 @@ export default function App() {
     try{ await set(ref(db,"aptNames"), nm); }catch(e){}
     await saveTax(taxRate,costRate);
     if(apiKey.trim()) ls.set(SK_APIKEY, apiKey.trim());
+    if(newPin.trim()){ ls.set(SK_PIN, newPin.trim()); setSavedPin(newPin.trim()); setNewPin(""); }
     showToast("Salvato"); setView("calendar");
+  }
+
+  function tryPin(){
+    if(pinInput===savedPin){ setCanEdit(true); setShowPinModal(false); setPinInput(""); setPinError(false); showToast("Accesso consentito ✓"); }
+    else{ setPinError(true); setTimeout(()=>setPinError(false),1500); }
   }
   async function importFromText(text){
     try{
@@ -279,6 +297,7 @@ export default function App() {
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1a0533 0%,#0d1f3c 50%,#0a2e1a 100%)",fontFamily:"Georgia,serif",color:"#f0e6d3",overflowX:"hidden"}}>
       {toast&&<div style={{position:"fixed",top:18,left:"50%",transform:"translateX(-50%)",background:toast.type==="error"?"#8B1A2A":"#1a4a2e",color:"#f0e6d3",padding:"11px 22px",borderRadius:8,zIndex:9999,fontSize:13,border:`1px solid ${toast.type==="error"?"#D94F5C":"#4CAF8E"}`,whiteSpace:"nowrap"}}>{toast.msg}</div>}
+      {showPinModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:14,padding:28,maxWidth:300,width:"88%",textAlign:"center"}}><div style={{fontSize:32,marginBottom:8}}>🔒</div><div style={{fontSize:16,color:"#C8A96E",marginBottom:6}}>Accesso modifiche</div><div style={{fontSize:12,color:"#999",marginBottom:16}}>Inserisci il PIN per modificare i dati</div><input type="password" value={pinInput} onChange={e=>setPinInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryPin()} placeholder="PIN" style={{...S.input,textAlign:"center",fontSize:20,letterSpacing:6,marginBottom:8}} autoFocus/>{pinError&&<div style={{fontSize:12,color:"#D94F5C",marginBottom:8}}>PIN errato ❌</div>}<div style={{display:"flex",gap:8,marginTop:8}}><button onClick={()=>{setShowPinModal(false);setPinInput("");setPinError(false);}} style={{...S.btn("#1a1a2e","#888"),flex:1,padding:"11px 0"}}>Annulla</button><button onClick={tryPin} style={{...S.btn("#1a3a2a","#4CAF8A"),flex:2,padding:"11px 0",fontWeight:"bold"}}>Entra</button></div></div></div>}
       {calExportOpen&&(()=>{ const b=bookings.find(x=>x.id===calExportOpen); if(!b) return null; const nm=aptLabel(b.apt); return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setCalExportOpen(null)}><div style={{background:"#1a1a2e",border:"1px solid #C8A96E",borderRadius:14,padding:24,maxWidth:310,width:"88%"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:16,color:"#C8A96E",marginBottom:4,textAlign:"center"}}>📅 Aggiungi al Calendario</div><div style={{fontSize:12,color:"#999",textAlign:"center",marginBottom:18}}>Check-out di <strong style={{color:"#f0e6d3"}}>{b.guest}</strong><br/>{fmtDate(parseDate(b.checkout))} · {nm}</div><button onClick={()=>{ openGCal(b,nm); setCalExportOpen(null); }} style={{width:"100%",padding:"13px 0",marginBottom:10,borderRadius:10,border:"none",background:"#4285F4",color:"#fff",fontFamily:"Georgia,serif",fontSize:14,cursor:"pointer",fontWeight:"bold"}}>🗓 Google Calendar</button><button onClick={()=>{ downloadICS(b,nm); setCalExportOpen(null); }} style={{width:"100%",padding:"13px 0",borderRadius:10,border:"1px solid #C8A96E",background:"rgba(200,169,110,0.1)",color:"#C8A96E",fontFamily:"Georgia,serif",fontSize:14,cursor:"pointer",fontWeight:"bold"}}>🍎 Apple Calendar (.ics)</button><button onClick={()=>setCalExportOpen(null)} style={{width:"100%",padding:"10px 0",marginTop:10,borderRadius:10,border:"none",background:"transparent",color:"#666",fontFamily:"Georgia,serif",fontSize:13,cursor:"pointer"}}>Annulla</button></div></div>; })()}
       {delId!==null&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:998,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:12,padding:28,maxWidth:300,width:"88%",textAlign:"center"}}><div style={{fontSize:28,marginBottom:10}}>🗑️</div><div style={{fontSize:15,marginBottom:22}}>Eliminare questa prenotazione?</div><div style={{display:"flex",gap:10,justifyContent:"center"}}><button onClick={()=>setDelId(null)} style={S.btn("#333","#888")}>Annulla</button><button onClick={()=>handleDel(delId)} style={S.btn("#8B1A2A","#D94F5C")}>Elimina</button></div></div></div>}
       {delMId!==null&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:998,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:12,padding:28,maxWidth:300,width:"88%",textAlign:"center"}}><div style={{fontSize:28,marginBottom:10}}>🗑️</div><div style={{fontSize:15,marginBottom:22}}>Eliminare questa manutenzione?</div><div style={{display:"flex",gap:10,justifyContent:"center"}}><button onClick={()=>setDelMId(null)} style={S.btn("#333","#888")}>Annulla</button><button onClick={()=>handleMDel(delMId)} style={S.btn("#8B1A2A","#D94F5C")}>Elimina</button></div></div></div>}
@@ -289,6 +308,7 @@ export default function App() {
           <h1 style={{fontSize:24,fontWeight:"normal",margin:"4px 0"}}>Villa Caterina</h1>
           <div style={{width:32,height:2,background:"#C8A96E",margin:"8px auto 4px"}}/>
           <button onClick={()=>setHideAmounts(v=>!v)} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(200,169,110,0.3)",borderRadius:8,padding:"4px 12px",color:hideAmounts?"#FF6B6B":"#4CAF8A",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12,marginTop:6}}>{hideAmounts?"🙈 Importi nascosti":"👁 Importi visibili"}</button>
+          {savedPin&&<button onClick={()=>{ if(canEdit){ setCanEdit(false); showToast("Modalità sola lettura"); } else setShowPinModal(true); }} style={{background:"rgba(255,255,255,0.07)",border:`1px solid ${canEdit?"#4CAF8A44":"#C8A96E44"}`,borderRadius:8,padding:"4px 12px",color:canEdit?"#4CAF8A":"#C8A96E",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12,marginTop:6,marginLeft:6}}>{canEdit?"🔓 Modifica attiva":"🔒 Sola lettura"}</button>}
           {syncing&&<div style={{fontSize:10,color:"#C8A96E",marginTop:4}}>⟳ Sincronizzazione...</div>}
         </div>
 
@@ -456,11 +476,17 @@ export default function App() {
             <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginTop:16,marginBottom:10}}>Aliquote netto</div>
             <div style={{display:"flex",gap:8,marginBottom:6}}><div style={{flex:1}}><div style={{fontSize:10,color:"#999",marginBottom:5}}>Tasse (%)</div><input type="number" value={taxRate} onChange={e=>setTaxRate(e.target.value)} placeholder="21" min="0" max="100" style={S.input}/></div><div style={{flex:1}}><div style={{fontSize:10,color:"#999",marginBottom:5}}>Altri costi (%)</div><input type="number" value={costRate} onChange={e=>setCostRate(e.target.value)} placeholder="10" min="0" max="100" style={S.input}/></div></div>
             <div style={{padding:"9px 12px",background:"rgba(126,200,227,0.08)",borderRadius:8,fontSize:12,color:"#999",marginBottom:18}}>Netto: {100-(parseFloat(taxRate)||0)-(parseFloat(costRate)||0)}%</div>
+            <div style={{background:"rgba(200,169,110,0.07)",border:"1px solid rgba(200,169,110,0.25)",borderRadius:11,padding:14,marginBottom:18}}>
+              <div style={{fontSize:12,color:"#C8A96E",fontWeight:"bold",marginBottom:4}}>🔒 PIN di accesso modifiche</div>
+              <div style={{fontSize:11,color:"#999",marginBottom:10}}>Chi non conosce il PIN può solo visualizzare. Lascia vuoto per disabilitare.</div>
+              <input type="password" value={newPin} onChange={e=>setNewPin(e.target.value)} placeholder={savedPin?"••••• (lascia vuoto per non cambiare)":"Imposta PIN..."} style={{...S.input,fontFamily:"monospace"}}/>
+              {savedPin&&<div style={{fontSize:11,color:"#4CAF8A",marginTop:4}}>✓ PIN attivo — inserisci nuovo PIN per cambiarlo</div>}
+            </div>
             <div style={{background:"rgba(126,200,227,0.07)",border:"1px solid rgba(126,200,227,0.25)",borderRadius:11,padding:14,marginBottom:18}}>
               <div style={{fontSize:12,color:"#7EC8E3",fontWeight:"bold",marginBottom:4}}>🤖 Chiave API Anthropic</div>
               <div style={{fontSize:11,color:"#999",marginBottom:10}}>Necessaria per caricare prenotazioni da foto/PDF. Ottienila su console.anthropic.com</div>
               <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="sk-ant-..." style={{...S.input,fontFamily:"monospace",fontSize:12}}/>
-              {apiKey&&<div style={{fontSize:11,color:"#4CAF8A",marginTop:4}}>✓ Chiave inserita — verrà salvata con "Salva"</div>}
+              {apiKey&&<div style={{fontSize:11,color:"#4CAF8A",marginTop:4}}>✓ Chiave inserita</div>}
             </div>
             <div style={{display:"flex",gap:8}}><button onClick={()=>setView("calendar")} style={{...S.btn("#1a1a2e","#888"),flex:1,padding:"12px 0"}}>Annulla</button><button onClick={saveSettings} style={{...S.btn("#1a3a2a","#4CAF8A"),flex:2,padding:"12px 0",fontWeight:"bold"}}>Salva</button></div>
           </div>
