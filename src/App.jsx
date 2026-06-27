@@ -133,17 +133,14 @@ export default function App() {
     // Carica API key e PIN da localStorage (locale, non condivisi)
     const kR = ls.get(SK_APIKEY);
     if(kR?.value) setApiKey(kR.value);
-    const pR = ls.get(SK_PIN);
-    if(pR?.value) setSavedPin(pR.value);
-    // Se non c'è PIN impostato, si può modificare liberamente
-    if(!pR?.value) setCanEdit(true);
     // Ascolta Firebase in tempo reale
     const unsubB = onValue(ref(db,"bookings"), snap => { if(snap.exists()) setBookings(Object.values(snap.val())); else setBookings([]); });
     const unsubM = onValue(ref(db,"maints"),   snap => { if(snap.exists()) setMaints(Object.values(snap.val()));   else setMaints([]); });
     const unsubN = onValue(ref(db,"aptNames"), snap => { if(snap.exists()){ const nm=snap.val(); setAptNames(nm); setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:nm[a.id]||a.name}))); }});
     const unsubT = onValue(ref(db,"taxRate"),  snap => { if(snap.exists()){ const p=snap.val(); setTaxRate(p.tax||0); setCostRate(p.cost||0); }});
+    const unsubP = onValue(ref(db,"pin"), snap => { if(snap.exists()){ setSavedPin(snap.val()); setCanEdit(false); } else { setCanEdit(true); } });
     setLoading(false);
-    return () => { unsubB(); unsubM(); unsubN(); unsubT(); };
+    return () => { unsubB(); unsubM(); unsubN(); unsubT(); unsubP(); };
   }, []);
 
   async function saveBookings(nb){
@@ -229,7 +226,7 @@ export default function App() {
     try{ await set(ref(db,"aptNames"), nm); }catch(e){}
     await saveTax(taxRate,costRate);
     if(apiKey.trim()) ls.set(SK_APIKEY, apiKey.trim());
-    if(newPin.trim()){ ls.set(SK_PIN, newPin.trim()); setSavedPin(newPin.trim()); setNewPin(""); }
+    if(newPin.trim()){ await set(ref(db,"pin"), newPin.trim()); setSavedPin(newPin.trim()); setNewPin(""); }
     showToast("Salvato"); setView("calendar");
   }
 
