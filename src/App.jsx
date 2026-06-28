@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+// usa l'artifact principale (VillaCaterina.jsx) qui a destra
 
 const DEFAULT_APARTMENTS = [
   { id: "zaffiro",      name: "Zaffiro",        color: "#4A9FD4", emoji: "💙" },
