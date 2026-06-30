@@ -1,4 +1,19 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, onValue, set } from "firebase/database";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBIBAPXRzD-bYUOMeHPSxIWpRLbC1fnv6s",
+  authDomain: "villacaterina-8f539.firebaseapp.com",
+  databaseURL: "https://villacaterina-8f539-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "villacaterina-8f539",
+  storageBucket: "villacaterina-8f539.firebasestorage.app",
+  messagingSenderId: "784032642401",
+  appId: "1:784032642401:web:48415151afeca5b1f8c120"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getDatabase(firebaseApp);
 
 const DEFAULT_APARTMENTS = [
   { id: "zaffiro",      name: "Zaffiro",        color: "#4A9FD4", emoji: "💙" },
@@ -29,7 +44,6 @@ const MAINT_TYPES = [
 const MONTHS       = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const MONTHS_SHORT = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
 const DAYS_SHORT   = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
-const SK_BOOKINGS="vcaterina-bookings", SK_MAINTS="vcaterina-maints", SK_NAMES="vcaterina-aptnames", SK_TAX="vcaterina-taxrate";
 
 /* ── helpers ── */
 const p2 = n => String(n).padStart(2,"0");
@@ -73,7 +87,6 @@ function downloadICS(b, name) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([ics],{type:"text/calendar"})); a.download = `checkout-${b.id}.ics`; a.click();
 }
 
-/* ════════════════════════════════════════════ MAIN ════════════════════════════════════════════ */
 export default function App() {
   const [apts, setApts]         = useState(DEFAULT_APARTMENTS);
   const [aptNames, setAptNames] = useState(() => Object.fromEntries(DEFAULT_APARTMENTS.map(a=>[a.id,a.name])));
@@ -103,7 +116,7 @@ export default function App() {
   const [showExport, setShowExport]   = useState(false);
   const [importText, setImportText]   = useState("");
   const [hideAmounts, setHideAmounts] = useState(false);
-  const [listFilter, setListFilter]   = useState("all"); // "all"|"bookings"|"maint"
+  const [listFilter, setListFilter]   = useState("all");
   const [aiLoading, setAiLoading]     = useState(false);
   const [aiError, setAiError]         = useState(null);
   const fileInputRef = useRef(null);
@@ -116,33 +129,32 @@ export default function App() {
   const isAptSel = id => selApt==="all"||selApt.includes(id);
   const isAllSel = ()  => selApt==="all";
 
-  /* ── statsApts helpers ── */
   function toggleStatsApt(id) {
     if(id==="all"){ setStatsApts(["all"]); return; }
     setStatsApts(prev => { const wo=prev.filter(x=>x!=="all"); if(wo.includes(id)){ const n=wo.filter(x=>x!==id); return n.length===0?["all"]:n; } return [...wo,id]; });
   }
 
-  /* ── storage ── */
-  useEffect(() => { loadData(); const t=setInterval(loadData,30000); return ()=>clearInterval(t); }, []);
-  async function loadData() {
-    try {
-      let bR=null,mR=null,nR=null,tR=null;
-      for (const sh of [true,false]) {
-        try{ if(!bR) bR=await window.storage.get(SK_BOOKINGS,sh); }catch(e){}
-        try{ if(!mR) mR=await window.storage.get(SK_MAINTS,sh); }catch(e){}
-        try{ if(!nR) nR=await window.storage.get(SK_NAMES,sh); }catch(e){}
-        try{ if(!tR) tR=await window.storage.get(SK_TAX,sh); }catch(e){}
-      }
-      if(bR?.value) setBookings(JSON.parse(bR.value));
-      if(mR?.value) setMaints(JSON.parse(mR.value));
-      if(nR?.value){ const nm=JSON.parse(nR.value); setAptNames(nm); setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:nm[a.id]||a.name}))); }
-      if(tR?.value){ const p=JSON.parse(tR.value); setTaxRate(p.tax||0); setCostRate(p.cost||0); }
-    } catch(e){}
-    finally{ setLoading(false); }
-  }
-  async function saveBookings(nb){ setSyncing(true); try{ await window.storage.set(SK_BOOKINGS,JSON.stringify(nb),true); }catch(e){ showToast("Errore sync","error"); }finally{ setSyncing(false); } }
-  async function saveMaints(nm){ try{ await window.storage.set(SK_MAINTS,JSON.stringify(nm),true); }catch(e){} }
-  async function saveTax(t,c){ try{ await window.storage.set(SK_TAX,JSON.stringify({tax:t,cost:c}),true); }catch(e){} }
+  /* ── Firebase ── */
+  useEffect(() => {
+    const bRef = ref(db, "bookings");
+    const mRef = ref(db, "maints");
+    const sRef = ref(db, "settings");
+    const u1 = onValue(bRef, snap => { if(snap.exists()) setBookings(Object.values(snap.val())); setLoading(false); });
+    const u2 = onValue(mRef, snap => { if(snap.exists()) setMaints(Object.values(snap.val())); });
+    const u3 = onValue(sRef, snap => {
+      if(snap.exists()){
+        const s=snap.val();
+        if(s.aptNames){ setAptNames(s.aptNames); setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:s.aptNames[a.id]||a.name}))); }
+        if(s.taxRate!==undefined) setTaxRate(s.taxRate);
+        if(s.costRate!==undefined) setCostRate(s.costRate);
+      } else { setLoading(false); }
+    });
+    return () => { u1(); u2(); u3(); };
+  }, []);
+
+  async function saveBookings(nb){ setSyncing(true); try{ const obj=Object.fromEntries(nb.map(b=>[b.id,b])); await set(ref(db,"bookings"),obj); }catch(e){ showToast("Errore sync","error"); }finally{ setSyncing(false); } }
+  async function saveMaints(nm){ try{ const obj=Object.fromEntries(nm.map(m=>[m.id,m])); await set(ref(db,"maints"),obj); }catch(e){} }
+  async function saveSettings(names,tax,cost){ try{ await set(ref(db,"settings"),{aptNames:names,taxRate:tax,costRate:cost}); }catch(e){} }
 
   /* ── toast ── */
   function showToast(msg, type="success"){ setToast({msg,type}); setTimeout(()=>setToast(null),2800); }
@@ -180,77 +192,33 @@ export default function App() {
   function handleMEdit(m){ setMForm({apt:m.apt,type:m.type,date:m.date,notes:m.notes||"",cost:m.cost||""}); setEditMId(m.id); setView("addMaint"); }
   async function handleMDel(id){ const nm=maints.filter(m=>m.id!==id); setMaints(nm); await saveMaints(nm); setDelMId(null); showToast("Eliminata"); }
 
-  /* ── AI image/PDF upload ── */
+  /* ── AI upload ── */
   async function handleFileUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setAiError(null);
-    setAiLoading(true);
+    const file = e.target.files?.[0]; if (!file) return;
+    setAiError(null); setAiLoading(true);
     try {
-      // read as base64
-      const base64 = await new Promise((res, rej) => {
-        const reader = new FileReader();
-        reader.onload  = () => res(reader.result.split(",")[1]);
-        reader.onerror = () => rej(new Error("Lettura file fallita"));
-        reader.readAsDataURL(file);
-      });
-
-      const isPdf = file.type === "application/pdf";
-      const mediaType = isPdf ? "application/pdf" : (file.type||"image/jpeg");
-      const contentBlock = isPdf
-        ? { type:"document", source:{ type:"base64", media_type:mediaType, data:base64 } }
-        : { type:"image",    source:{ type:"base64", media_type:mediaType, data:base64 } };
-
-      const platIds = PLATFORMS.map(p=>p.id).join("|");
-      const aptIds  = apts.map(a=>a.id).join("|");
-      const prompt  = `Questo documento è una conferma di prenotazione affitto breve. Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun markdown. Formato esatto:
-{"guest":"nome cognome","checkin":"YYYY-MM-DD","checkout":"YYYY-MM-DD","price":0,"guests":0,"platform":"uno di: ${platIds}","apt":"uno di: ${aptIds} oppure stringa vuota","notes":""}
-Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in formato YYYY-MM-DD.`;
-
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type":"application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 500,
-          messages: [{ role:"user", content:[ contentBlock, { type:"text", text:prompt } ] }]
-        })
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      if (data.error) throw new Error(data.error.message||"Errore API");
-
-      const rawText = (data.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("").trim();
-      const clean   = rawText.replace(/```json|```/g,"").trim();
-      const parsed  = JSON.parse(clean);
-
-      setForm(f => ({
-        ...f,
-        guest:    parsed.guest    || f.guest,
-        checkin:  parsed.checkin  || f.checkin,
-        checkout: parsed.checkout || f.checkout,
-        price:    parsed.price && parsed.price!==0 ? String(parsed.price)  : f.price,
-        guests:   parsed.guests && parsed.guests!==0 ? String(parsed.guests) : f.guests,
-        platform: PLATFORMS.some(p=>p.id===parsed.platform) ? parsed.platform : f.platform,
-        apt:      apts.some(a=>a.id===parsed.apt) ? parsed.apt : f.apt,
-        notes:    parsed.notes    || f.notes,
-      }));
+      const base64 = await new Promise((res, rej) => { const r=new FileReader(); r.onload=()=>res(r.result.split(",")[1]); r.onerror=()=>rej(); r.readAsDataURL(file); });
+      const isPdf = file.type==="application/pdf";
+      const mediaType = isPdf?"application/pdf":(file.type||"image/jpeg");
+      const contentBlock = isPdf ? {type:"document",source:{type:"base64",media_type:mediaType,data:base64}} : {type:"image",source:{type:"base64",media_type:mediaType,data:base64}};
+      const platIds=PLATFORMS.map(p=>p.id).join("|"); const aptIds=apts.map(a=>a.id).join("|");
+      const prompt=`Questo documento è una conferma di prenotazione affitto breve. Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun markdown. Formato esatto:\n{"guest":"nome cognome","checkin":"YYYY-MM-DD","checkout":"YYYY-MM-DD","price":0,"guests":0,"platform":"uno di: ${platIds}","apt":"uno di: ${aptIds} oppure stringa vuota","notes":""}\nSe un dato non è leggibile usa stringa vuota o 0. Le date devono essere in formato YYYY-MM-DD.`;
+      const res = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,messages:[{role:"user",content:[contentBlock,{type:"text",text:prompt}]}]})});
+      if(!res.ok) throw new Error();
+      const data=await res.json(); if(data.error) throw new Error();
+      const rawText=(data.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("").trim();
+      const parsed=JSON.parse(rawText.replace(/```json|```/g,"").trim());
+      setForm(f=>({...f,guest:parsed.guest||f.guest,checkin:parsed.checkin||f.checkin,checkout:parsed.checkout||f.checkout,price:parsed.price&&parsed.price!==0?String(parsed.price):f.price,guests:parsed.guests&&parsed.guests!==0?String(parsed.guests):f.guests,platform:PLATFORMS.some(p=>p.id===parsed.platform)?parsed.platform:f.platform,apt:apts.some(a=>a.id===parsed.apt)?parsed.apt:f.apt,notes:parsed.notes||f.notes}));
       showToast("Dati estratti ✓ Verifica e salva");
-    } catch(err) {
-      console.error(err);
-      setAiError("Non riesco a leggere il documento. Controlla che sia un'immagine chiara o un PDF valido.");
-    } finally {
-      setAiLoading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
+    } catch(err){ setAiError("Non riesco a leggere il documento."); }
+    finally{ setAiLoading(false); if(fileInputRef.current) fileInputRef.current.value=""; }
   }
 
   /* ── settings ── */
-  async function saveSettings(){
-    const nm = Object.fromEntries(DEFAULT_APARTMENTS.map(a=>[a.id,aptNames[a.id]||a.name]));
+  async function handleSaveSettings(){
+    const nm=Object.fromEntries(DEFAULT_APARTMENTS.map(a=>[a.id,aptNames[a.id]||a.name]));
     setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:nm[a.id]})));
-    await Promise.all([ window.storage.set(SK_NAMES,JSON.stringify(nm),true).catch(()=>{}), saveTax(taxRate,costRate) ]);
+    await saveSettings(nm,taxRate,costRate);
     showToast("Salvato"); setView("calendar");
   }
 
@@ -264,20 +232,9 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
       if(data.taxRate!==undefined) setTaxRate(data.taxRate);
       if(data.costRate!==undefined) setCostRate(data.costRate);
       await saveBookings(data.bookings); await saveMaints(data.maints);
-      if(data.aptNames) await window.storage.set(SK_NAMES,JSON.stringify(data.aptNames),true).catch(()=>{});
-      if(data.taxRate!==undefined) await saveTax(data.taxRate,data.costRate||0);
+      if(data.aptNames) await saveSettings(data.aptNames,data.taxRate||0,data.costRate||0);
       setImportError(null); setImportText(""); showToast("Dati ripristinati ✓"); setView("calendar");
-    } catch{ setImportError("Testo non valido"); showToast("Errore importazione","error"); }
-  }
-  async function runDiag(){
-    const result={};
-    for(const sh of [true,false]){
-      for(const key of [SK_BOOKINGS,SK_MAINTS,SK_NAMES,SK_TAX]){
-        try{ const r=await window.storage.get(key,sh); if(r?.value){ const p=JSON.parse(r.value); result[`${key} (shared=${sh})`]=Array.isArray(p)?`${p.length} elementi`:JSON.stringify(p).substring(0,80); } }catch(e){}
-      }
-      try{ const l=await window.storage.list("",sh); result[`Chiavi (shared=${sh})`]=l?.keys?.length?l.keys.join(", "):"nessuna"; }catch(e){}
-    }
-    setDiagInfo(result);
+    }catch{ setImportError("Testo non valido"); showToast("Errore importazione","error"); }
   }
 
   /* ── calendar helpers ── */
@@ -311,22 +268,18 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
     });
   }
 
-  /* ── derived ── */
   const filteredBookings = useMemo(()=>bookings.filter(b=>selApt==="all"||selApt.includes(b.apt)).sort((a,b)=>a.checkin.localeCompare(b.checkin)),[bookings,selApt]);
   const filteredMaints   = useMemo(()=>maints.filter(m=>selApt==="all"||m.apt==="all"||selApt.includes(m.apt)).sort((a,b)=>a.date.localeCompare(b.date)),[maints,selApt]);
   const upcomingCheckouts= useMemo(()=>{ const t=todayISO(),l=toISO(addDays(new Date(),7)); return bookings.filter(b=>b.checkout>=t&&b.checkout<=l).sort((a,b)=>a.checkout.localeCompare(b.checkout)); },[bookings]);
   const upcomingCheckins = useMemo(()=>{ const t=todayISO(),l=toISO(addDays(new Date(),7)); return bookings.filter(b=>b.checkin>=t&&b.checkin<=l).sort((a,b)=>a.checkin.localeCompare(b.checkin)); },[bookings]);
 
-  /* ══════════ RENDER ══════════ */
   if(loading) return <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1a0533,#0d1f3c,#0a2e1a)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif",color:"#C8A96E"}}><div style={{fontSize:40,marginBottom:12}}>🏰</div><div style={{fontSize:14,letterSpacing:2}}>Caricamento...</div></div>;
 
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1a0533 0%,#0d1f3c 50%,#0a2e1a 100%)",fontFamily:"Georgia,serif",color:"#f0e6d3",overflowX:"hidden"}}>
 
-      {/* TOAST */}
       {toast&&<div style={{position:"fixed",top:18,left:"50%",transform:"translateX(-50%)",background:toast.type==="error"?"#8B1A2A":"#1a4a2e",color:"#f0e6d3",padding:"11px 22px",borderRadius:8,zIndex:9999,fontSize:13,border:`1px solid ${toast.type==="error"?"#D94F5C":"#4CAF8E"}`,whiteSpace:"nowrap"}}>{toast.msg}</div>}
 
-      {/* EXPORT CALENDAR MODAL */}
       {calExportOpen&&(()=>{
         const b=bookings.find(x=>x.id===calExportOpen); if(!b) return null;
         const nm=aptLabel(b.apt);
@@ -341,13 +294,11 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
         </div>;
       })()}
 
-      {/* DELETE MODALS */}
       {delId!==null&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:998,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:12,padding:28,maxWidth:300,width:"88%",textAlign:"center"}}><div style={{fontSize:28,marginBottom:10}}>🗑️</div><div style={{fontSize:15,marginBottom:22}}>Eliminare questa prenotazione?</div><div style={{display:"flex",gap:10,justifyContent:"center"}}><button onClick={()=>setDelId(null)} style={S.btn("#333","#888")}>Annulla</button><button onClick={()=>handleDel(delId)} style={S.btn("#8B1A2A","#D94F5C")}>Elimina</button></div></div></div>}
       {delMId!==null&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:998,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:12,padding:28,maxWidth:300,width:"88%",textAlign:"center"}}><div style={{fontSize:28,marginBottom:10}}>🗑️</div><div style={{fontSize:15,marginBottom:22}}>Eliminare questa manutenzione?</div><div style={{display:"flex",gap:10,justifyContent:"center"}}><button onClick={()=>setDelMId(null)} style={S.btn("#333","#888")}>Annulla</button><button onClick={()=>handleMDel(delMId)} style={S.btn("#8B1A2A","#D94F5C")}>Elimina</button></div></div></div>}
 
       <div style={{maxWidth:520,margin:"0 auto",paddingBottom:100}}>
 
-        {/* HEADER */}
         <div style={{padding:"22px 20px 6px",textAlign:"center"}}>
           <div style={{fontSize:10,letterSpacing:4,color:"#C8A96E",textTransform:"uppercase"}}>Gestione</div>
           <h1 style={{fontSize:24,fontWeight:"normal",margin:"4px 0"}}>Villa Caterina</h1>
@@ -358,7 +309,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
           {syncing&&<div style={{fontSize:10,color:"#C8A96E",marginTop:4}}>⟳ Sincronizzazione...</div>}
         </div>
 
-        {/* APT FILTER PILLS */}
         {!["add","addMaint","settings","stats"].includes(view)&&(
           <div style={{padding:"4px 12px 8px",display:"flex",gap:6,overflowX:"auto",scrollbarWidth:"none"}}>
             <Pill active={isAllSel()} color="#C8A96E" onClick={()=>toggleSelApt("all")}>Tutti</Pill>
@@ -366,7 +316,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
           </div>
         )}
 
-        {/* SCADENZE BANNER */}
         {["calendar","list"].includes(view)&&(upcomingCheckouts.length>0||upcomingCheckins.length>0)&&(
           <div style={{margin:"0 12px 12px",display:"flex",flexDirection:"column",gap:10}}>
             {upcomingCheckouts.length>0&&<div style={{background:"rgba(255,107,107,0.08)",border:"1px solid rgba(255,107,107,0.35)",borderRadius:11,padding:12}}>
@@ -397,7 +346,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
           </div>
         )}
 
-        {/* ══════════ CALENDAR ══════════ */}
         {view==="calendar"&&(
           <div style={{padding:"0 12px"}}>
             <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:10}}>
@@ -414,7 +362,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
               }
               <button onClick={()=>navCal(1)} style={S.navBtn}>›</button>
             </div>
-
             {calView==="month"?(
               <>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:2}}>
@@ -476,18 +423,13 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
           </div>
         )}
 
-        {/* ══════════ LIST ══════════ */}
         {view==="list"&&(
           <div style={{padding:"0 12px"}}>
-
-            {/* ── FILTRO LISTA ── */}
             <div style={{display:"flex",gap:6,marginBottom:14}}>
               <Pill active={listFilter==="all"}      color="#C8A96E" onClick={()=>setListFilter("all")}>Tutto</Pill>
               <Pill active={listFilter==="bookings"} color="#4CAF8A" onClick={()=>setListFilter("bookings")}>📋 Prenotazioni</Pill>
               <Pill active={listFilter==="maint"}    color="#ffd580" onClick={()=>setListFilter("maint")}>🛠️ Manutenzioni</Pill>
             </div>
-
-            {/* ── PRENOTAZIONI ── */}
             {listFilter!=="maint"&&<>
               <div style={{display:"flex",gap:8,marginBottom:14}}>
                 <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#C8A96E"}}>{filteredBookings.length}</div><div style={{fontSize:9,color:"#999"}}>PRENOT.</div></div>
@@ -530,8 +472,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
                 </div>;
               })}
             </>}
-
-            {/* ── MANUTENZIONI ── */}
             {listFilter!=="bookings"&&<>
               {listFilter==="maint"&&(
                 <div style={{display:"flex",gap:8,marginBottom:14}}>
@@ -558,7 +498,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
           </div>
         )}
 
-        {/* ══════════ STATS ══════════ */}
         {view==="stats"&&(()=>{
           const isAll=statsApts.includes("all");
           const bksYear=filterBks({year:statsYear,aptIds:statsApts});
@@ -581,8 +520,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
               <Pill active={statsApts.includes("all")} color="#C8A96E" onClick={()=>toggleStatsApt("all")}>Tutti</Pill>
               {apts.map(a=><Pill key={a.id} active={statsApts.includes(a.id)} color={a.color} onClick={()=>toggleStatsApt(a.id)}>{a.emoji} {a.name}</Pill>)}
             </div>
-
-            {/* Anno / Mese */}
             <div style={{background:"rgba(255,255,255,0.05)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(255,255,255,0.08)"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                 <div style={{fontSize:10,color:"#aaa",letterSpacing:2,textTransform:"uppercase"}}>{periodLabel.toUpperCase()}</div>
@@ -602,8 +539,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
                 <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#FFB347"}}>{bksFilt.length>0?avgNts.toFixed(1):"—"}</div><div style={{fontSize:9,color:"#999"}}>Ø NOTTI/PREN.</div></div>
               </div>
             </div>
-
-            {/* Storico */}
             {(()=>{
               const allBks=(isAll?bookings:bookings.filter(b=>statsApts.includes(b.apt))).filter(b=>b.checkin>=ATTIVITA_START);
               const allRev=allBks.reduce((s,b)=>s+(parseFloat(b.price)||0),0);
@@ -622,8 +557,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
                 </div>
               </div>;
             })()}
-
-            {/* Grafico mensile */}
             <div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.12)"}}>
               <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Ricavi mensili {statsYear}</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(12,1fr)",gap:3,alignItems:"flex-end",height:110,marginBottom:4}}>
@@ -666,7 +599,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
               {statsMonth!==null&&(()=>{
                 const bkM=filterBks({year:statsYear,month:statsMonth,aptIds:statsApts});
                 const rM=bkM.reduce((s,b)=>s+(parseFloat(b.price)||0),0);
-                const nM=bkM.reduce((s,b)=>s+nights(parseDate(b.checkin),parseDate(b.checkout)),0);
                 return <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:12}}>
                   <div style={{display:"flex",gap:8,marginBottom:10}}>
                     <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:barColor}}>€{fmtEur(rM)}</div><div style={{fontSize:9,color:"#999"}}>LORDO {MONTHS_SHORT[statsMonth]}</div></div>
@@ -680,8 +612,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
                 </div>;
               })()}
             </div>
-
-            {/* Piattaforme */}
             {(()=>{
               const byP={}; PLATFORMS.forEach(p=>{byP[p.id]={count:0,revenue:0};}); bksFilt.forEach(b=>{const pid=b.platform||"altro"; if(!byP[pid])byP[pid]={count:0,revenue:0}; byP[pid].count++; byP[pid].revenue+=parseFloat(b.price)||0;});
               return <div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.12)"}}>
@@ -695,8 +625,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
                 </div>;})}
               </div>;
             })()}
-
-            {/* Classifica */}
             {(()=>{
               const medals=["🥇","🥈","🥉","4°","5°"];
               const rankY=apts.map(a=>({...a,rev:filterBks({year:statsYear,aptIds:[a.id]}).reduce((s,b)=>s+(parseFloat(b.price)||0),0)})).sort((a,b)=>b.rev-a.rev);
@@ -722,8 +650,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
                 </div>;})}
               </div>;
             })()}
-
-            {/* Card appartamento */}
             {aptsShow.map(a=>{
               const bkA=filterBks({year:statsYear,month:statsMonth,aptIds:[a.id]});
               const rA=bkA.reduce((s,b)=>s+(parseFloat(b.price)||0),0);
@@ -749,24 +675,20 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
           </div>;
         })()}
 
-        {/* ══════════ ADD BOOKING ══════════ */}
         {view==="add"&&(
           <div style={{padding:"0 14px"}}>
             <div style={{fontSize:15,color:"#C8A96E",marginBottom:14,textAlign:"center",letterSpacing:1}}>{editId!==null?"Modifica":"Nuova"} Prenotazione</div>
-
-            {/* ── CARICA DA IMMAGINE/PDF ── */}
             {editId===null&&(
               <div style={{background:"rgba(126,200,227,0.07)",border:"1px solid rgba(126,200,227,0.3)",borderRadius:11,padding:14,marginBottom:16}}>
                 <div style={{fontSize:12,color:"#7EC8E3",fontWeight:"bold",marginBottom:4}}>📷 Compila dai dati della prenotazione</div>
-                <div style={{fontSize:11,color:"#999",marginBottom:10}}>Carica uno screenshot o PDF della conferma. I campi verranno compilati automaticamente dall'IA — controlla sempre prima di salvare.</div>
+                <div style={{fontSize:11,color:"#999",marginBottom:10}}>Carica uno screenshot o PDF della conferma.</div>
                 <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" onChange={handleFileUpload} disabled={aiLoading} style={{display:"none"}} id="fileUpload"/>
                 <label htmlFor="fileUpload" style={{display:"block",textAlign:"center",...S.btn("#1a2a3a","#7EC8E3"),padding:"12px 0",fontWeight:"bold",cursor:aiLoading?"not-allowed":"pointer",opacity:aiLoading?0.6:1}}>
                   {aiLoading?"⏳ Analisi in corso...":"📎 Scegli foto o PDF"}
                 </label>
-                {aiError&&<div style={{marginTop:8,fontSize:11,color:"#D94F5C",lineHeight:1.4}}>{aiError}</div>}
+                {aiError&&<div style={{marginTop:8,fontSize:11,color:"#D94F5C"}}>{aiError}</div>}
               </div>
             )}
-
             <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:7}}>Appartamento</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>{apts.map(a=><Pill key={a.id} active={form.apt===a.id} color={a.color} onClick={()=>setForm(f=>({...f,apt:a.id}))}>{a.emoji} {a.name}</Pill>)}</div>
             <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Nome Ospite</div>
@@ -796,7 +718,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
           </div>
         )}
 
-        {/* ══════════ ADD MAINT ══════════ */}
         {view==="addMaint"&&(
           <div style={{padding:"0 14px"}}>
             <div style={{fontSize:15,color:"#ffd580",marginBottom:14,textAlign:"center",letterSpacing:1}}>{editMId!==null?"Modifica":"Nuova"} Manutenzione</div>
@@ -820,7 +741,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
           </div>
         )}
 
-        {/* ══════════ SETTINGS ══════════ */}
         {view==="settings"&&(
           <div style={{padding:"0 14px"}}>
             <div style={{fontSize:15,color:"#C8A96E",marginBottom:16,textAlign:"center"}}>Impostazioni</div>
@@ -839,11 +759,6 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
               <button onClick={()=>importFromText(importText)} style={{...S.btn("#1a2a3a","#7EC8E3"),width:"100%",padding:"11px 0",fontWeight:"bold",marginTop:6}}>Ripristina dati</button>
               {importError&&<div style={{marginTop:8,fontSize:11,color:"#D94F5C"}}>{importError}</div>}
             </div>
-            <div style={{background:"rgba(255,100,100,0.07)",border:"1px solid rgba(255,100,100,0.2)",borderRadius:11,padding:14,marginBottom:18}}>
-              <div style={{fontSize:12,color:"#ff9999",marginBottom:10}}>🔍 Diagnostica storage</div>
-              <button onClick={runDiag} style={{...S.btn("#3a1a1a","#ff9999"),width:"100%",padding:"10px 0",marginBottom:diagInfo?10:0}}>Controlla dati salvati</button>
-              {diagInfo&&<div style={{fontSize:11,lineHeight:1.7}}>{Object.entries(diagInfo).map(([k,v])=><div key={k} style={{borderBottom:"1px solid rgba(255,255,255,0.06)",paddingBottom:4,marginBottom:4}}><div style={{color:"#999",fontSize:10}}>{k}</div><div style={{color:(v.includes("0 elementi")||v==="nessuna")?"#ff9999":"#4CAF8A",fontWeight:"bold"}}>{v}</div></div>)}</div>}
-            </div>
             {DEFAULT_APARTMENTS.map(a=>(
               <div key={a.id} style={{marginBottom:12}}>
                 <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6,display:"flex",alignItems:"center",gap:6}}><div style={{width:9,height:9,borderRadius:2,background:apts.find(x=>x.id===a.id)?.color||"#888"}}/>{a.emoji} {a.name}</div>
@@ -858,12 +773,11 @@ Se un dato non è leggibile usa stringa vuota o 0. Le date devono essere in form
             <div style={{padding:"9px 12px",background:"rgba(126,200,227,0.08)",borderRadius:8,fontSize:12,color:"#999",marginBottom:18}}>Netto: {100-(parseFloat(taxRate)||0)-(parseFloat(costRate)||0)}%</div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setView("calendar")} style={{...S.btn("#1a1a2e","#888"),flex:1,padding:"12px 0"}}>Annulla</button>
-              <button onClick={saveSettings} style={{...S.btn("#1a3a2a","#4CAF8A"),flex:2,padding:"12px 0",fontWeight:"bold"}}>Salva</button>
+              <button onClick={handleSaveSettings} style={{...S.btn("#1a3a2a","#4CAF8A"),flex:2,padding:"12px 0",fontWeight:"bold"}}>Salva</button>
             </div>
           </div>
         )}
 
-        {/* BOTTOM NAV */}
         <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(8,4,18,0.96)",backdropFilter:"blur(16px)",borderTop:"1px solid rgba(200,169,110,0.18)",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"8px 0 14px",zIndex:100}}>
           <TabBtn label="Calendario" active={view==="calendar"} onClick={()=>setView("calendar")}>📅</TabBtn>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
