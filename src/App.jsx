@@ -112,6 +112,14 @@ export default function App() {
   const [statsApts, setStatsApts]   = useState(["all"]);
   const [calExportOpen, setCalExportOpen] = useState(null);
   const [anthropicKey, setAnthropicKey] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const isViewMode = new URLSearchParams(window.location.search).get("mode") === "view";
+  const canEdit = isAdmin && !isViewMode;
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState(false);
+  const [adminPin, setAdminPin] = useState("1234");
+  const [newPin, setNewPin] = useState("");
   const [diagInfo, setDiagInfo] = useState(null);
   const [importError, setImportError] = useState(null);
   const [showExport, setShowExport]   = useState(false);
@@ -149,6 +157,7 @@ export default function App() {
         if(s.taxRate!==undefined) setTaxRate(s.taxRate);
         if(s.costRate!==undefined) setCostRate(s.costRate);
         if(s.anthropicKey) setAnthropicKey(s.anthropicKey);
+        if(s.adminPin) setAdminPin(s.adminPin);
       } else { setLoading(false); }
     });
     return () => { u1(); u2(); u3(); };
@@ -156,7 +165,7 @@ export default function App() {
 
   async function saveBookings(nb){ setSyncing(true); try{ const obj=Object.fromEntries(nb.map(b=>[b.id,b])); await set(ref(db,"bookings"),obj); }catch(e){ showToast("Errore sync","error"); }finally{ setSyncing(false); } }
   async function saveMaints(nm){ try{ const obj=Object.fromEntries(nm.map(m=>[m.id,m])); await set(ref(db,"maints"),obj); }catch(e){} }
-  async function saveSettings(names,tax,cost,akey){ try{ await set(ref(db,"settings"),{aptNames:names,taxRate:tax,costRate:cost,anthropicKey:akey}); }catch(e){} }
+  async function saveSettings(names,tax,cost,akey,apin){ try{ await set(ref(db,"settings"),{aptNames:names,taxRate:tax,costRate:cost,anthropicKey:akey,adminPin:apin}); }catch(e){} }
 
   /* ── toast ── */
   function showToast(msg, type="success"){ setToast({msg,type}); setTimeout(()=>setToast(null),2800); }
@@ -220,7 +229,11 @@ export default function App() {
   async function handleSaveSettings(){
     const nm=Object.fromEntries(DEFAULT_APARTMENTS.map(a=>[a.id,aptNames[a.id]||a.name]));
     setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:nm[a.id]})));
-    await saveSettings(nm,taxRate,costRate,anthropicKey);
+    const pinToSave = newPin.length>=4 ? newPin : adminPin;
+    if(newPin.length>0&&newPin.length<4){ showToast("PIN deve avere almeno 4 cifre","error"); return; }
+    if(newPin.length>=4) setAdminPin(newPin);
+    setNewPin("");
+    await saveSettings(nm,taxRate,costRate,anthropicKey,pinToSave);
     showToast("Salvato"); setView("calendar");
   }
 
@@ -275,10 +288,28 @@ export default function App() {
   const upcomingCheckouts= useMemo(()=>{ const t=todayISO(),l=toISO(addDays(new Date(),7)); return bookings.filter(b=>b.checkout>=t&&b.checkout<=l).sort((a,b)=>a.checkout.localeCompare(b.checkout)); },[bookings]);
   const upcomingCheckins = useMemo(()=>{ const t=todayISO(),l=toISO(addDays(new Date(),7)); return bookings.filter(b=>b.checkin>=t&&b.checkin<=l).sort((a,b)=>a.checkin.localeCompare(b.checkin)); },[bookings]);
 
+  function handlePinSubmit(){
+    if(pinInput===adminPin){ setIsAdmin(true); setShowPinModal(false); setPinInput(""); setPinError(false); showToast("Accesso admin ✓"); }
+    else { setPinError(true); setPinInput(""); }
+  }
+
   if(loading) return <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1a0533,#0d1f3c,#0a2e1a)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif",color:"#C8A96E"}}><div style={{fontSize:40,marginBottom:12}}>🏰</div><div style={{fontSize:14,letterSpacing:2}}>Caricamento...</div></div>;
 
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1a0533 0%,#0d1f3c 50%,#0a2e1a 100%)",fontFamily:"Georgia,serif",color:"#f0e6d3",overflowX:"hidden"}}>
+
+      {showPinModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:14,padding:28,maxWidth:300,width:"88%",textAlign:"center"}}>
+          <div style={{fontSize:24,marginBottom:8}}>🔐</div>
+          <div style={{fontSize:15,color:"#C8A96E",marginBottom:16}}>PIN Amministratore</div>
+          <input type="password" inputMode="numeric" maxLength={6} value={pinInput} onChange={e=>setPinInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handlePinSubmit()} placeholder="••••" style={{...S.input,textAlign:"center",fontSize:24,letterSpacing:8,marginBottom:8}} autoFocus/>
+          {pinError&&<div style={{fontSize:12,color:"#D94F5C",marginBottom:8}}>PIN errato</div>}
+          <div style={{display:"flex",gap:8,marginTop:8}}>
+            <button onClick={()=>{setShowPinModal(false);setPinInput("");setPinError(false);}} style={{...S.btn("#333","#888"),flex:1,padding:"10px 0"}}>Annulla</button>
+            <button onClick={handlePinSubmit} style={{...S.btn("#1a3a2a","#4CAF8A"),flex:1,padding:"10px 0",fontWeight:"bold"}}>Entra</button>
+          </div>
+        </div>
+      </div>}
 
       {toast&&<div style={{position:"fixed",top:18,left:"50%",transform:"translateX(-50%)",background:toast.type==="error"?"#8B1A2A":"#1a4a2e",color:"#f0e6d3",padding:"11px 22px",borderRadius:8,zIndex:9999,fontSize:13,border:`1px solid ${toast.type==="error"?"#D94F5C":"#4CAF8E"}`,whiteSpace:"nowrap"}}>{toast.msg}</div>}
 
@@ -305,9 +336,14 @@ export default function App() {
           <div style={{fontSize:10,letterSpacing:4,color:"#C8A96E",textTransform:"uppercase"}}>Gestione</div>
           <h1 style={{fontSize:24,fontWeight:"normal",margin:"4px 0"}}>Villa Caterina</h1>
           <div style={{width:32,height:2,background:"#C8A96E",margin:"8px auto 4px"}}/>
-          <button onClick={()=>setHideAmounts(v=>!v)} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(200,169,110,0.3)",borderRadius:8,padding:"4px 12px",color:hideAmounts?"#FF6B6B":"#4CAF8A",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12,marginTop:6}}>
-            {hideAmounts?"🙈 Importi nascosti":"👁 Importi visibili"}
-          </button>
+          <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:6}}>
+            <button onClick={()=>setHideAmounts(v=>!v)} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(200,169,110,0.3)",borderRadius:8,padding:"4px 12px",color:hideAmounts?"#FF6B6B":"#4CAF8A",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12}}>
+              {hideAmounts?"🙈 Nascosti":"👁 Visibili"}
+            </button>
+            {!isViewMode&&<button onClick={()=>{ if(isAdmin){setIsAdmin(false);showToast("Uscito da admin");} else setShowPinModal(true); }} style={{background:"rgba(255,255,255,0.07)",border:`1px solid ${isAdmin?"#C8A96E":"#555"}`,borderRadius:8,padding:"4px 12px",color:isAdmin?"#C8A96E":"#555",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12}}>
+              {isAdmin?"🔓 Admin":"🔒 Admin"}
+            </button>}
+          </div>
           {syncing&&<div style={{fontSize:10,color:"#C8A96E",marginTop:4}}>⟳ Sincronizzazione...</div>}
         </div>
 
@@ -468,8 +504,8 @@ export default function App() {
                   {b.notes&&<div style={{fontSize:11,color:"#aaa",fontStyle:"italic",borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:6,marginTop:4}}>{b.notes}</div>}
                   <div style={{display:"flex",gap:7,marginTop:9}}>
                     <button onClick={()=>setCalExportOpen(b.id)} style={{...S.btn("#1a2a3a","#FFB347"),fontSize:12,padding:"7px 10px"}}>📅</button>
-                    <button onClick={()=>handleEdit(b)} style={{...S.btn("#1a3a4a","#7EC8E3"),flex:1,fontSize:12,padding:"7px 0"}}>Modifica</button>
-                    <button onClick={()=>setDelId(b.id)} style={{...S.btn("#3a1a1a","#D94F5C"),flex:1,fontSize:12,padding:"7px 0"}}>Elimina</button>
+                    {canEdit&&<><button onClick={()=>handleEdit(b)} style={{...S.btn("#1a3a4a","#7EC8E3"),flex:1,fontSize:12,padding:"7px 0"}}>Modifica</button>
+                    <button onClick={()=>setDelId(b.id)} style={{...S.btn("#3a1a1a","#D94F5C"),flex:1,fontSize:12,padding:"7px 0"}}>Elimina</button></>}
                   </div>
                 </div>;
               })}
@@ -490,10 +526,10 @@ export default function App() {
                     <div style={{textAlign:"right"}}><div style={{fontSize:12,color:"#ffd580"}}>{fmtDate(parseDate(m.date))}</div>{m.cost&&<div style={{fontSize:12,color:"#D94F5C"}}>€{fmtEur(parseFloat(m.cost))}</div>}</div>
                   </div>
                   {m.notes&&<div style={{fontSize:11,color:"#aaa",fontStyle:"italic",marginTop:7}}>{m.notes}</div>}
-                  <div style={{display:"flex",gap:7,marginTop:9}}>
+                  {canEdit&&<div style={{display:"flex",gap:7,marginTop:9}}>
                     <button onClick={()=>handleMEdit(m)} style={{...S.btn("#2a2a1a","#ffd580"),flex:1,fontSize:12,padding:"7px 0"}}>Modifica</button>
                     <button onClick={()=>setDelMId(m.id)} style={{...S.btn("#3a1a1a","#D94F5C"),flex:1,fontSize:12,padding:"7px 0"}}>Elimina</button>
-                  </div>
+                  </div>}
                 </div>
               ))}
             </>}
@@ -775,7 +811,10 @@ export default function App() {
             <div style={{padding:"9px 12px",background:"rgba(126,200,227,0.08)",borderRadius:8,fontSize:12,color:"#999",marginBottom:18}}>Netto: {100-(parseFloat(taxRate)||0)-(parseFloat(costRate)||0)}%</div>
             <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Chiave API Anthropic (per import AI)</div>
             <input type="password" value={anthropicKey} onChange={e=>setAnthropicKey(e.target.value)} placeholder="sk-ant-..." style={S.input}/>
-            <div style={{fontSize:10,color:"#666",marginBottom:18}}>Necessaria per importare prenotazioni da foto/PDF</div>
+            <div style={{fontSize:10,color:"#666",marginBottom:14}}>Necessaria per importare prenotazioni da foto/PDF</div>
+            <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Cambia PIN Admin</div>
+            <input type="password" inputMode="numeric" maxLength={6} value={newPin} onChange={e=>setNewPin(e.target.value)} placeholder="Nuovo PIN (min. 4 cifre)" style={S.input}/>
+            <div style={{fontSize:10,color:"#666",marginBottom:18}}>Lascia vuoto per mantenere il PIN attuale</div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setView("calendar")} style={{...S.btn("#1a1a2e","#888"),flex:1,padding:"12px 0"}}>Annulla</button>
               <button onClick={handleSaveSettings} style={{...S.btn("#1a3a2a","#4CAF8A"),flex:2,padding:"12px 0",fontWeight:"bold"}}>Salva</button>
@@ -786,8 +825,9 @@ export default function App() {
         <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(8,4,18,0.96)",backdropFilter:"blur(16px)",borderTop:"1px solid rgba(200,169,110,0.18)",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"8px 0 14px",zIndex:100}}>
           <TabBtn label="Calendario" active={view==="calendar"} onClick={()=>setView("calendar")}>📅</TabBtn>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <button onClick={()=>{setEditId(null);setForm(emptyForm());setAiError(null);setView("add");}} style={{width:48,height:48,borderRadius:"50%",background:"#4CAF8A",border:"none",fontSize:22,color:"#1a0533",cursor:"pointer",boxShadow:"0 4px 18px rgba(76,175,138,0.4)"}}>+</button>
-            <button onClick={()=>{setEditMId(null);setMForm(emptyMForm());setView("addMaint");}} style={{width:36,height:36,borderRadius:"50%",background:"#ffd580",border:"none",fontSize:16,color:"#1a0533",cursor:"pointer"}}>M</button>
+            {canEdit&&<><button onClick={()=>{setEditId(null);setForm(emptyForm());setAiError(null);setView("add");}} style={{width:48,height:48,borderRadius:"50%",background:"#4CAF8A",border:"none",fontSize:22,color:"#1a0533",cursor:"pointer",boxShadow:"0 4px 18px rgba(76,175,138,0.4)"}}>+</button>
+            <button onClick={()=>{setEditMId(null);setMForm(emptyMForm());setView("addMaint");}} style={{width:36,height:36,borderRadius:"50%",background:"#ffd580",border:"none",fontSize:16,color:"#1a0533",cursor:"pointer"}}>M</button></>}
+            {!isViewMode&&!isAdmin&&<button onClick={()=>setShowPinModal(true)} style={{width:48,height:48,borderRadius:"50%",background:"rgba(255,255,255,0.07)",border:"1px solid #555",fontSize:20,color:"#555",cursor:"pointer"}}>🔒</button>}
           </div>
           <TabBtn label="Lista"       active={view==="list"}     onClick={()=>setView("list")}>📋</TabBtn>
           <TabBtn label="Statistiche" active={view==="stats"}    onClick={()=>setView("stats")}>📊</TabBtn>
