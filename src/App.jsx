@@ -120,7 +120,7 @@ export default function App() {
   const [pinError, setPinError] = useState(false);
   const [adminPin, setAdminPin] = useState("1234");
   const [newPin, setNewPin] = useState("");
-  const [diagInfo, setDiagInfo] = useState(null);
+  const [viewBooking, setViewBooking] = useState(null);
   const [importError, setImportError] = useState(null);
   const [showExport, setShowExport]   = useState(false);
   const [importText, setImportText]   = useState("");
@@ -327,6 +327,38 @@ export default function App() {
         </div>;
       })()}
 
+      {viewBooking&&(()=>{
+        const b=viewBooking; const a=apts.find(x=>x.id===b.apt); const n=nights(parseDate(b.checkin),parseDate(b.checkout));
+        return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:997,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setViewBooking(null)}>
+          <div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:"14px 14px 0 0",padding:24,width:"100%",maxWidth:520}} onClick={e=>e.stopPropagation()}>
+            <div style={{width:36,height:4,background:"#555",borderRadius:2,margin:"0 auto 18px"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+              <div>
+                <div style={{fontSize:17,fontWeight:"bold"}}>{b.guest}</div>
+                <div style={{fontSize:12,color:a?a.color:"#888"}}>{a?.emoji} {a?.name}</div>
+              </div>
+              <div style={{padding:"3px 10px",borderRadius:8,background:b.status==="tentative"?"rgba(200,169,110,0.2)":"rgba(76,175,138,0.2)",color:b.status==="tentative"?"#C8A96E":"#4CAF8A",fontSize:12}}>{b.status==="tentative"?"Provvisoria":"Confermata"}</div>
+            </div>
+            {b.platform&&<div style={{marginBottom:10,display:"inline-block",padding:"3px 10px",borderRadius:10,background:platColor(b.platform)+"33",border:`1px solid ${platColor(b.platform)}66`,fontSize:12,color:platColor(b.platform)}}>{platEmoji(b.platform)} {platLabel(b.platform)}</div>}
+            <div style={{display:"flex",gap:12,fontSize:13,marginBottom:10}}>
+              <div><div style={{fontSize:9,color:"#999"}}>CHECK-IN</div>{fmtDate(parseDate(b.checkin))}</div>
+              <div style={{color:"#555",alignSelf:"flex-end"}}>→</div>
+              <div><div style={{fontSize:9,color:"#999"}}>CHECK-OUT</div>{fmtDate(parseDate(b.checkout))}</div>
+              <div style={{marginLeft:"auto",textAlign:"right"}}><div style={{fontSize:9,color:"#999"}}>NOTTI</div><div style={{color:"#C8A96E"}}>{n}</div></div>
+            </div>
+            {b.price&&<div style={{fontSize:16,fontWeight:"bold",color:"#4CAF8A",marginBottom:4}}>€{fmtEur(parseFloat(b.price))}<span style={{fontSize:11,color:"#7EC8E3",marginLeft:8}}>~€{fmtEur(parseFloat(b.price)*taxMult)} netto</span></div>}
+            {b.guests&&<div style={{fontSize:12,color:"#aaa",marginBottom:4}}>Ospiti: {b.guests}</div>}
+            {b.notes&&<div style={{fontSize:12,color:"#aaa",fontStyle:"italic",borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:8,marginTop:8}}>{b.notes}</div>}
+            <div style={{display:"flex",gap:8,marginTop:16}}>
+              <button onClick={()=>{setCalExportOpen(b.id);setViewBooking(null);}} style={{...S.btn("#1a2a3a","#FFB347"),fontSize:13,padding:"10px 14px"}}>📅</button>
+              {canEdit&&<><button onClick={()=>{handleEdit(b);setViewBooking(null);}} style={{...S.btn("#1a3a4a","#7EC8E3"),flex:1,fontSize:13,padding:"10px 0"}}>Modifica</button>
+              <button onClick={()=>{setDelId(b.id);setViewBooking(null);}} style={{...S.btn("#3a1a1a","#D94F5C"),flex:1,fontSize:13,padding:"10px 0"}}>Elimina</button></>}
+              {!canEdit&&<button onClick={()=>setViewBooking(null)} style={{...S.btn("#1a1a2e","#888"),flex:1,fontSize:13,padding:"10px 0"}}>Chiudi</button>}
+            </div>
+          </div>
+        </div>;
+      })()}
+
       {delId!==null&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:998,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:12,padding:28,maxWidth:300,width:"88%",textAlign:"center"}}><div style={{fontSize:28,marginBottom:10}}>🗑️</div><div style={{fontSize:15,marginBottom:22}}>Eliminare questa prenotazione?</div><div style={{display:"flex",gap:10,justifyContent:"center"}}><button onClick={()=>setDelId(null)} style={S.btn("#333","#888")}>Annulla</button><button onClick={()=>handleDel(delId)} style={S.btn("#8B1A2A","#D94F5C")}>Elimina</button></div></div></div>}
       {delMId!==null&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:998,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:12,padding:28,maxWidth:300,width:"88%",textAlign:"center"}}><div style={{fontSize:28,marginBottom:10}}>🗑️</div><div style={{fontSize:15,marginBottom:22}}>Eliminare questa manutenzione?</div><div style={{display:"flex",gap:10,justifyContent:"center"}}><button onClick={()=>setDelMId(null)} style={S.btn("#333","#888")}>Annulla</button><button onClick={()=>handleMDel(delMId)} style={S.btn("#8B1A2A","#D94F5C")}>Elimina</button></div></div></div>}
 
@@ -420,7 +452,7 @@ export default function App() {
                       <div style={{fontSize:9,color:isT?"#C8A96E":"#aaa",textAlign:"right"}}>{day}</div>
                       {all.slice(0,4).map((x,i)=>
                         x._k==="b"
-                          ?<div key={i} onClick={()=>canEdit&&handleEdit(x)} style={{fontSize:8,background:aptColor(x.apt)+"cc",borderRadius:2,padding:"1px 2px",marginBottom:1,color:"#1a0533",fontWeight:"bold",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:canEdit?"pointer":"default"}}>{x.guest.split(" ")[0]}</div>
+                          ?<div key={i} onClick={()=>setViewBooking(x)} style={{fontSize:8,background:aptColor(x.apt)+"cc",borderRadius:2,padding:"1px 2px",marginBottom:1,color:"#1a0533",fontWeight:"bold",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer"}}>{x.guest.split(" ")[0]}</div>
                           :<div key={i} style={{fontSize:8,background:"rgba(255,200,100,0.25)",borderRadius:2,padding:"1px 2px",marginBottom:1,color:"#ffd580",whiteSpace:"nowrap"}}>{mtEmoji(x.type)}</div>
                       )}
                       {all.length>4&&<div style={{fontSize:7,color:"#C8A96E"}}>+{all.length-4}</div>}
@@ -445,7 +477,7 @@ export default function App() {
                       const hasOut=bookings.some(b=>b.apt===apt.id&&b.checkout===iso);
                       return <div key={i} style={{minHeight:36,borderRadius:3,background:isT?"rgba(200,169,110,0.1)":"rgba(255,255,255,0.04)",border:isT?"1px solid #C8A96E44":"1px solid rgba(255,255,255,0.05)",padding:1,overflow:"hidden",position:"relative"}}>
                         {hasOut&&<div style={{position:"absolute",top:1,right:1,width:4,height:4,borderRadius:"50%",background:"#FF6B6B"}}/>}
-                        {bk&&<div onClick={()=>canEdit&&handleEdit(bk)} style={{fontSize:7,background:apt.color+"dd",color:"#1a0533",borderRadius:2,padding:"1px 2px",fontWeight:"bold",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:canEdit?"pointer":"default"}}>{bk.guest.split(" ")[0]}</div>}
+                        {bk&&<div onClick={()=>setViewBooking(bk)} style={{fontSize:7,background:apt.color+"dd",color:"#1a0533",borderRadius:2,padding:"1px 2px",fontWeight:"bold",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer"}}>{bk.guest.split(" ")[0]}</div>}
                         {mt.map((m,j)=><div key={j} style={{fontSize:9,textAlign:"center"}}>{mtEmoji(m.type)}</div>)}
                       </div>;
                     })}
