@@ -111,6 +111,7 @@ export default function App() {
   const [statsMonth, setStatsMonth] = useState(null);
   const [statsApts, setStatsApts]   = useState(["all"]);
   const [calExportOpen, setCalExportOpen] = useState(null);
+  const [anthropicKey, setAnthropicKey] = useState("");
   const [diagInfo, setDiagInfo] = useState(null);
   const [importError, setImportError] = useState(null);
   const [showExport, setShowExport]   = useState(false);
@@ -147,6 +148,7 @@ export default function App() {
         if(s.aptNames){ setAptNames(s.aptNames); setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:s.aptNames[a.id]||a.name}))); }
         if(s.taxRate!==undefined) setTaxRate(s.taxRate);
         if(s.costRate!==undefined) setCostRate(s.costRate);
+        if(s.anthropicKey) setAnthropicKey(s.anthropicKey);
       } else { setLoading(false); }
     });
     return () => { u1(); u2(); u3(); };
@@ -154,7 +156,7 @@ export default function App() {
 
   async function saveBookings(nb){ setSyncing(true); try{ const obj=Object.fromEntries(nb.map(b=>[b.id,b])); await set(ref(db,"bookings"),obj); }catch(e){ showToast("Errore sync","error"); }finally{ setSyncing(false); } }
   async function saveMaints(nm){ try{ const obj=Object.fromEntries(nm.map(m=>[m.id,m])); await set(ref(db,"maints"),obj); }catch(e){} }
-  async function saveSettings(names,tax,cost){ try{ await set(ref(db,"settings"),{aptNames:names,taxRate:tax,costRate:cost}); }catch(e){} }
+  async function saveSettings(names,tax,cost,akey){ try{ await set(ref(db,"settings"),{aptNames:names,taxRate:tax,costRate:cost,anthropicKey:akey}); }catch(e){} }
 
   /* ── toast ── */
   function showToast(msg, type="success"){ setToast({msg,type}); setTimeout(()=>setToast(null),2800); }
@@ -203,7 +205,7 @@ export default function App() {
       const contentBlock = isPdf ? {type:"document",source:{type:"base64",media_type:mediaType,data:base64}} : {type:"image",source:{type:"base64",media_type:mediaType,data:base64}};
       const platIds=PLATFORMS.map(p=>p.id).join("|"); const aptIds=apts.map(a=>a.id).join("|");
       const prompt=`Questo documento è una conferma di prenotazione affitto breve. Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun markdown. Formato esatto:\n{"guest":"nome cognome","checkin":"YYYY-MM-DD","checkout":"YYYY-MM-DD","price":0,"guests":0,"platform":"uno di: ${platIds}","apt":"uno di: ${aptIds} oppure stringa vuota","notes":""}\nSe un dato non è leggibile usa stringa vuota o 0. Le date devono essere in formato YYYY-MM-DD.`;
-      const res = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,messages:[{role:"user",content:[contentBlock,{type:"text",text:prompt}]}]})});
+      const res = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,messages:[{role:"user",content:[contentBlock,{type:"text",text:prompt}]}]})});
       if(!res.ok) throw new Error();
       const data=await res.json(); if(data.error) throw new Error();
       const rawText=(data.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("").trim();
@@ -218,7 +220,7 @@ export default function App() {
   async function handleSaveSettings(){
     const nm=Object.fromEntries(DEFAULT_APARTMENTS.map(a=>[a.id,aptNames[a.id]||a.name]));
     setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:nm[a.id]})));
-    await saveSettings(nm,taxRate,costRate);
+    await saveSettings(nm,taxRate,costRate,anthropicKey);
     showToast("Salvato"); setView("calendar");
   }
 
@@ -771,6 +773,9 @@ export default function App() {
               <div style={{flex:1}}><div style={{fontSize:10,color:"#999",marginBottom:5}}>Altri costi (%)</div><input type="number" value={costRate} onChange={e=>setCostRate(e.target.value)} placeholder="10" min="0" max="100" style={S.input}/></div>
             </div>
             <div style={{padding:"9px 12px",background:"rgba(126,200,227,0.08)",borderRadius:8,fontSize:12,color:"#999",marginBottom:18}}>Netto: {100-(parseFloat(taxRate)||0)-(parseFloat(costRate)||0)}%</div>
+            <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Chiave API Anthropic (per import AI)</div>
+            <input type="password" value={anthropicKey} onChange={e=>setAnthropicKey(e.target.value)} placeholder="sk-ant-..." style={S.input}/>
+            <div style={{fontSize:10,color:"#666",marginBottom:18}}>Necessaria per importare prenotazioni da foto/PDF</div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setView("calendar")} style={{...S.btn("#1a1a2e","#888"),flex:1,padding:"12px 0"}}>Annulla</button>
               <button onClick={handleSaveSettings} style={{...S.btn("#1a3a2a","#4CAF8A"),flex:2,padding:"12px 0",fontWeight:"bold"}}>Salva</button>
