@@ -420,7 +420,7 @@ export default function App() {
                       <div style={{fontSize:9,color:isT?"#C8A96E":"#aaa",textAlign:"right"}}>{day}</div>
                       {all.slice(0,4).map((x,i)=>
                         x._k==="b"
-                          ?<div key={i} onClick={()=>handleEdit(x)} style={{fontSize:8,background:aptColor(x.apt)+"cc",borderRadius:2,padding:"1px 2px",marginBottom:1,color:"#1a0533",fontWeight:"bold",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer"}}>{x.guest.split(" ")[0]}</div>
+                          ?<div key={i} onClick={()=>canEdit&&handleEdit(x)} style={{fontSize:8,background:aptColor(x.apt)+"cc",borderRadius:2,padding:"1px 2px",marginBottom:1,color:"#1a0533",fontWeight:"bold",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:canEdit?"pointer":"default"}}>{x.guest.split(" ")[0]}</div>
                           :<div key={i} style={{fontSize:8,background:"rgba(255,200,100,0.25)",borderRadius:2,padding:"1px 2px",marginBottom:1,color:"#ffd580",whiteSpace:"nowrap"}}>{mtEmoji(x.type)}</div>
                       )}
                       {all.length>4&&<div style={{fontSize:7,color:"#C8A96E"}}>+{all.length-4}</div>}
@@ -445,7 +445,7 @@ export default function App() {
                       const hasOut=bookings.some(b=>b.apt===apt.id&&b.checkout===iso);
                       return <div key={i} style={{minHeight:36,borderRadius:3,background:isT?"rgba(200,169,110,0.1)":"rgba(255,255,255,0.04)",border:isT?"1px solid #C8A96E44":"1px solid rgba(255,255,255,0.05)",padding:1,overflow:"hidden",position:"relative"}}>
                         {hasOut&&<div style={{position:"absolute",top:1,right:1,width:4,height:4,borderRadius:"50%",background:"#FF6B6B"}}/>}
-                        {bk&&<div onClick={()=>handleEdit(bk)} style={{fontSize:7,background:apt.color+"dd",color:"#1a0533",borderRadius:2,padding:"1px 2px",fontWeight:"bold",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer"}}>{bk.guest.split(" ")[0]}</div>}
+                        {bk&&<div onClick={()=>canEdit&&handleEdit(bk)} style={{fontSize:7,background:apt.color+"dd",color:"#1a0533",borderRadius:2,padding:"1px 2px",fontWeight:"bold",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:canEdit?"pointer":"default"}}>{bk.guest.split(" ")[0]}</div>}
                         {mt.map((m,j)=><div key={j} style={{fontSize:9,textAlign:"center"}}>{mtEmoji(m.type)}</div>)}
                       </div>;
                     })}
