@@ -393,7 +393,7 @@ export default function App() {
               {upcomingCheckouts.map(b=>{
                 const dl=Math.round((parseDate(b.checkout)-new Date())/86400000);
                 const lbl=b.checkout===todayISO()?"OGGI":b.checkout===toISO(addDays(new Date(),1))?"DOMANI":`tra ${dl} giorni`;
-                return <div key={b.id} onClick={()=>handleEdit(b)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,0.06)",cursor:"pointer"}}>
+                return <div key={b.id} onClick={()=>setViewBooking(b)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,0.06)",cursor:"pointer"}}>
                   <div><div style={{fontSize:13,fontWeight:"bold"}}>{b.guest}</div><div style={{fontSize:11,color:aptColor(b.apt)}}>{aptEmoji(b.apt)} {aptLabel(b.apt)}</div></div>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:11,fontWeight:"bold",color:"#FF6B6B",padding:"3px 8px",borderRadius:8,background:"rgba(255,107,107,0.15)"}}>{lbl}</span>
@@ -407,7 +407,7 @@ export default function App() {
               {upcomingCheckins.map(b=>{
                 const dl=Math.round((parseDate(b.checkin)-new Date())/86400000);
                 const lbl=b.checkin===todayISO()?"OGGI":b.checkin===toISO(addDays(new Date(),1))?"DOMANI":`tra ${dl} giorni`;
-                return <div key={b.id} onClick={()=>handleEdit(b)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,0.06)",cursor:"pointer"}}>
+                return <div key={b.id} onClick={()=>setViewBooking(b)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,0.06)",cursor:"pointer"}}>
                   <div><div style={{fontSize:13,fontWeight:"bold"}}>{b.guest}</div><div style={{fontSize:11,color:aptColor(b.apt)}}>{aptEmoji(b.apt)} {aptLabel(b.apt)}</div></div>
                   <span style={{fontSize:11,fontWeight:"bold",color:"#4CAF8A",padding:"3px 8px",borderRadius:8,background:"rgba(76,175,138,0.15)"}}>{lbl}</span>
                 </div>;
