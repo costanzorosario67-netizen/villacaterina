@@ -56,7 +56,7 @@ const todayISO = () => toISO(new Date());
 const daysInMonth = (y,m) => new Date(y,m+1,0).getDate();
 const bkYear  = b => { const c=parseDate(b.checkout); return c?c.getFullYear():null; };
 const bkMonth = b => { const c=parseDate(b.checkout); return c?c.getMonth():null; };
-const emptyForm  = () => ({ apt:DEFAULT_APARTMENTS[0].id, guest:"", checkin:"", checkout:"", price:"", guests:"", notes:"", platform:"diretto", status:"confirmed" });
+  const emptyForm  = () => ({ apt:DEFAULT_APARTMENTS[0].id, guest:"", checkin:"", checkout:"", price:"", guests:"", notes:"", platform:"diretto", status:"confirmed", createdAt:"" });
 const emptyMForm = () => ({ apt:"all", type:"garden", date:"", notes:"", cost:"" });
 
 /* ── styles ── */
@@ -186,11 +186,11 @@ export default function App() {
   async function handleSave(){
     if(!form.guest.trim()||!form.checkin||!form.checkout){ showToast("Compila ospite, check-in e check-out","error"); return; }
     if(parseDate(form.checkout)<=parseDate(form.checkin)){ showToast("Checkout deve essere dopo check-in","error"); return; }
-    let nb = editId!==null ? bookings.map(b=>b.id===editId?{...b,...form,id:editId}:b) : [...bookings,{...form,id:Date.now()}];
+    let nb = editId!==null ? bookings.map(b=>b.id===editId?{...b,...form,id:editId}:b) : [...bookings,{...form,id:Date.now(),createdAt:form.createdAt||todayISO()}];
     showToast(editId!==null?"Aggiornata":"Salvata"); setEditId(null);
     setBookings(nb); await saveBookings(nb); setForm(emptyForm()); setView("list");
   }
-  function handleEdit(b){ setForm({apt:b.apt,guest:b.guest,checkin:b.checkin,checkout:b.checkout,price:b.price,guests:b.guests||"",notes:b.notes||"",platform:b.platform||"diretto",status:b.status||"confirmed"}); setEditId(b.id); setView("add"); }
+  function handleEdit(b){ setForm({apt:b.apt,guest:b.guest,checkin:b.checkin,checkout:b.checkout,price:b.price,guests:b.guests||"",notes:b.notes||"",platform:b.platform||"diretto",status:b.status||"confirmed",createdAt:b.createdAt||""}); setEditId(b.id); setView("add"); }
   async function handleDel(id){ const nb=bookings.filter(b=>b.id!==id); setBookings(nb); await saveBookings(nb); setDelId(null); showToast("Eliminata"); }
 
   /* ── maints CRUD ── */
@@ -349,6 +349,7 @@ export default function App() {
             {b.price&&<div style={{fontSize:16,fontWeight:"bold",color:"#4CAF8A",marginBottom:4}}>€{fmtEur(parseFloat(b.price))}<span style={{fontSize:11,color:"#7EC8E3",marginLeft:8}}>~€{fmtEur(parseFloat(b.price)*taxMult)} netto</span></div>}
             {b.guests&&<div style={{fontSize:12,color:"#aaa",marginBottom:4}}>Ospiti: {b.guests}</div>}
             {b.notes&&<div style={{fontSize:12,color:"#aaa",fontStyle:"italic",borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:8,marginTop:8}}>{b.notes}</div>}
+            {b.createdAt&&<div style={{fontSize:11,color:"#555",marginTop:8}}>📅 Inserita il: {fmtDate(parseDate(b.createdAt))}</div>}
             <div style={{display:"flex",gap:8,marginTop:16}}>
               <button onClick={()=>{setCalExportOpen(b.id);setViewBooking(null);}} style={{...S.btn("#1a2a3a","#FFB347"),fontSize:13,padding:"10px 14px"}}>📅</button>
               {canEdit&&<><button onClick={()=>{handleEdit(b);setViewBooking(null);}} style={{...S.btn("#1a3a4a","#7EC8E3"),flex:1,fontSize:13,padding:"10px 0"}}>Modifica</button>
@@ -779,7 +780,9 @@ export default function App() {
               {[["confirmed","Confermata","#4CAF8A"],["tentative","Provvisoria","#C8A96E"]].map(([v,l,c])=><button key={v} onClick={()=>setForm(f=>({...f,status:v}))} style={{flex:1,padding:"10px 0",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:13,background:form.status===v?c:"rgba(255,255,255,0.06)",color:form.status===v?"#1a0533":"#aaa"}}>{l}</button>)}
             </div>
             <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Note</div>
-            <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Note aggiuntive..." rows={3} style={{...S.input,resize:"vertical",marginBottom:16}}/>
+            <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Note aggiuntive..." rows={3} style={{...S.input,resize:"vertical",marginBottom:12}}/>
+            <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Data inserimento</div>
+            <input type="date" value={form.createdAt} onChange={e=>setForm(f=>({...f,createdAt:e.target.value}))} style={{...S.input,marginBottom:16}}/>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>{setEditId(null);setForm(emptyForm());setView("list");}} style={{...S.btn("#1a1a2e","#888"),flex:1,padding:"12px 0"}}>Annulla</button>
               {editId!==null&&<button onClick={()=>setDelId(editId)} style={{...S.btn("#3a1a1a","#D94F5C"),flex:1,padding:"12px 0"}}>Elimina</button>}
