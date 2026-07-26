@@ -684,6 +684,22 @@ export default function App() {
               })()}
             </div>
             {(()=>{
+              const ntsEff=bksFilt.reduce((s,b)=>{
+                const n=nights(parseDate(b.checkin),parseDate(b.checkout));
+                return s+(b.apt==="villacaterina"?n*4:n);
+              },0);
+              const avgNight=ntsEff>0?totRev/ntsEff:0;
+              return <div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.12)"}}>
+                <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>💰 Ricavo medio per notte — {periodLabel}</div>
+                <div style={{fontSize:11,color:"#999",marginBottom:10}}>(Villa Caterina conteggiata x4 appartamenti)</div>
+                <div style={{display:"flex",gap:8}}>
+                  <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#FFB347"}}>€{fmtEur(avgNight)}</div><div style={{fontSize:9,color:"#999"}}>MEDIA/NOTTE LORDO</div></div>
+                  <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#7EC8E3"}}>€{fmtEur(avgNight*taxMult)}</div><div style={{fontSize:9,color:"#999"}}>MEDIA/NOTTE NETTO</div></div>
+                  <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#aaa"}}>{ntsEff}</div><div style={{fontSize:9,color:"#999"}}>NOTTI EFF.</div></div>
+                </div>
+              </div>;
+            })()}
+            {(()=>{
               const byP={}; PLATFORMS.forEach(p=>{byP[p.id]={count:0,revenue:0};}); bksFilt.forEach(b=>{const pid=b.platform||"altro"; if(!byP[pid])byP[pid]={count:0,revenue:0}; byP[pid].count++; byP[pid].revenue+=parseFloat(b.price)||0;});
               return <div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.12)"}}>
                 <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>Piattaforme — {periodLabel}</div>
