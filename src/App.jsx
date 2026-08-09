@@ -328,7 +328,7 @@ export default function App() {
       })()}
 
       {viewBooking&&(()=>{
-        const b=viewBooking; const a=apts.find(x=>x.id===b.apt); const n=nights(parseDate(b.checkin),parseDate(b.checkout));
+        const b=viewBooking; const a=apts.find(x=>x.id===b.apt); const n=nights(parseDate(b.checkin),parseDate(b.checkout)); const prc=parseFloat(b.price)||0;
         return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:997,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setViewBooking(null)}>
           <div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:"14px 14px 0 0",padding:24,width:"100%",maxWidth:520}} onClick={e=>e.stopPropagation()}>
             <div style={{width:36,height:4,background:"#555",borderRadius:2,margin:"0 auto 18px"}}/>
@@ -346,7 +346,8 @@ export default function App() {
               <div><div style={{fontSize:9,color:"#999"}}>CHECK-OUT</div>{fmtDate(parseDate(b.checkout))}</div>
               <div style={{marginLeft:"auto",textAlign:"right"}}><div style={{fontSize:9,color:"#999"}}>NOTTI</div><div style={{color:"#C8A96E"}}>{n}</div></div>
             </div>
-            {b.price&&<div style={{fontSize:16,fontWeight:"bold",color:"#4CAF8A",marginBottom:4}}>€{fmtEur(parseFloat(b.price))}<span style={{fontSize:11,color:"#7EC8E3",marginLeft:8}}>~€{fmtEur(parseFloat(b.price)*taxMult)} netto</span></div>}
+            {prc>0&&<div style={{fontSize:16,fontWeight:"bold",color:"#4CAF8A",marginBottom:4}}>€{fmtEur(prc)}<span style={{fontSize:11,color:"#7EC8E3",marginLeft:8}}>~€{fmtEur(prc*taxMult)} netto</span></div>}
+            {prc>0&&n>0&&<div style={{fontSize:12,color:"#FFB347",marginBottom:4}}>€{fmtEur(prc/n)}/notte · €{fmtEur(prc*taxMult/n)}/notte netto</div>}
             {b.guests&&<div style={{fontSize:12,color:"#aaa",marginBottom:4}}>Ospiti: {b.guests}</div>}
             {b.notes&&<div style={{fontSize:12,color:"#aaa",fontStyle:"italic",borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:8,marginTop:8}}>{b.notes}</div>}
             {b.createdAt&&<div style={{fontSize:11,color:"#555",marginTop:8}}>📅 Inserita il: {fmtDate(parseDate(b.createdAt))}</div>}
