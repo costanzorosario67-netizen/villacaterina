@@ -45,7 +45,6 @@ const MONTHS       = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","L
 const MONTHS_SHORT = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
 const DAYS_SHORT   = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
 
-/* ── helpers ── */
 const p2 = n => String(n).padStart(2,"0");
 const toISO = d => `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
 const parseDate = s => { if(!s) return null; const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); };
@@ -56,10 +55,9 @@ const todayISO = () => toISO(new Date());
 const daysInMonth = (y,m) => new Date(y,m+1,0).getDate();
 const bkYear  = b => { const c=parseDate(b.checkout); return c?c.getFullYear():null; };
 const bkMonth = b => { const c=parseDate(b.checkout); return c?c.getMonth():null; };
-  const emptyForm  = () => ({ apt:DEFAULT_APARTMENTS[0].id, guest:"", checkin:"", checkout:"", price:"", guests:"", notes:"", platform:"diretto", status:"confirmed", createdAt:"" });
+const emptyForm  = () => ({ apt:DEFAULT_APARTMENTS[0].id, guest:"", checkin:"", checkout:"", price:"", guests:"", notes:"", platform:"diretto", status:"confirmed", createdAt:"" });
 const emptyMForm = () => ({ apt:"all", type:"garden", date:"", notes:"", cost:"" });
 
-/* ── styles ── */
 const S = {
   input:  { width:"100%", background:"rgba(255,255,255,0.07)", border:"1px solid rgba(200,169,110,0.3)", borderRadius:8, padding:"10px 12px", color:"#f0e6d3", fontSize:14, fontFamily:"Georgia,serif", outline:"none", boxSizing:"border-box", marginBottom:4 },
   card:   { flex:1, background:"rgba(255,255,255,0.05)", borderRadius:9, padding:"10px 6px", textAlign:"center", border:"1px solid rgba(255,255,255,0.07)" },
@@ -130,7 +128,6 @@ export default function App() {
   const [aiError, setAiError]         = useState(null);
   const fileInputRef = useRef(null);
 
-  /* ── selApt helpers ── */
   function toggleSelApt(id) {
     if (id==="all") { setSelApt("all"); return; }
     setSelApt(prev => { const arr=prev==="all"?[]:[...prev]; if(arr.includes(id)){ const n=arr.filter(x=>x!==id); return n.length===0?"all":n; } return [...arr,id]; });
@@ -143,7 +140,6 @@ export default function App() {
     setStatsApts(prev => { const wo=prev.filter(x=>x!=="all"); if(wo.includes(id)){ const n=wo.filter(x=>x!==id); return n.length===0?["all"]:n; } return [...wo,id]; });
   }
 
-  /* ── Firebase ── */
   useEffect(() => {
     const bRef = ref(db, "bookings");
     const mRef = ref(db, "maints");
@@ -167,10 +163,8 @@ export default function App() {
   async function saveMaints(nm){ try{ const obj=Object.fromEntries(nm.map(m=>[m.id,m])); await set(ref(db,"maints"),obj); }catch(e){} }
   async function saveSettings(names,tax,cost,akey,apin){ try{ await set(ref(db,"settings"),{aptNames:names,taxRate:tax,costRate:cost,anthropicKey:akey,adminPin:apin}); }catch(e){} }
 
-  /* ── toast ── */
   function showToast(msg, type="success"){ setToast({msg,type}); setTimeout(()=>setToast(null),2800); }
 
-  /* ── lookups ── */
   const aptColor = id => apts.find(a=>a.id===id)?.color||"#888";
   const aptEmoji = id => apts.find(a=>a.id===id)?.emoji||"🏠";
   const aptLabel = id => apts.find(a=>a.id===id)?.name||id;
@@ -182,7 +176,6 @@ export default function App() {
   const taxMult  = (100-(parseFloat(taxRate)||0)-(parseFloat(costRate)||0))/100;
   const fmtEur   = v => hideAmounts?"••••":(Math.round(v*100)/100).toLocaleString("it-IT",{minimumFractionDigits:2,maximumFractionDigits:2});
 
-  /* ── bookings CRUD ── */
   async function handleSave(){
     if(!form.guest.trim()||!form.checkin||!form.checkout){ showToast("Compila ospite, check-in e check-out","error"); return; }
     if(parseDate(form.checkout)<=parseDate(form.checkin)){ showToast("Checkout deve essere dopo check-in","error"); return; }
@@ -193,7 +186,6 @@ export default function App() {
   function handleEdit(b){ setForm({apt:b.apt,guest:b.guest,checkin:b.checkin,checkout:b.checkout,price:b.price,guests:b.guests||"",notes:b.notes||"",platform:b.platform||"diretto",status:b.status||"confirmed",createdAt:b.createdAt||""}); setEditId(b.id); setView("add"); }
   async function handleDel(id){ const nb=bookings.filter(b=>b.id!==id); setBookings(nb); await saveBookings(nb); setDelId(null); showToast("Eliminata"); }
 
-  /* ── maints CRUD ── */
   async function handleMSave(){
     if(!mForm.date){ showToast("Inserisci la data","error"); return; }
     let nm = editMId!==null ? maints.map(m=>m.id===editMId?{...m,...mForm,id:editMId}:m) : [...maints,{...mForm,id:Date.now()}];
@@ -203,7 +195,6 @@ export default function App() {
   function handleMEdit(m){ setMForm({apt:m.apt,type:m.type,date:m.date,notes:m.notes||"",cost:m.cost||""}); setEditMId(m.id); setView("addMaint"); }
   async function handleMDel(id){ const nm=maints.filter(m=>m.id!==id); setMaints(nm); await saveMaints(nm); setDelMId(null); showToast("Eliminata"); }
 
-  /* ── AI upload ── */
   async function handleFileUpload(e) {
     const file = e.target.files?.[0]; if (!file) return;
     setAiError(null); setAiLoading(true);
@@ -225,7 +216,6 @@ export default function App() {
     finally{ setAiLoading(false); if(fileInputRef.current) fileInputRef.current.value=""; }
   }
 
-  /* ── settings ── */
   async function handleSaveSettings(){
     const nm=Object.fromEntries(DEFAULT_APARTMENTS.map(a=>[a.id,aptNames[a.id]||a.name]));
     setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:nm[a.id]})));
@@ -237,7 +227,6 @@ export default function App() {
     showToast("Salvato"); setView("calendar");
   }
 
-  /* ── import/export ── */
   async function importFromText(text){
     try{
       const data=JSON.parse(text.trim());
@@ -252,7 +241,6 @@ export default function App() {
     }catch{ setImportError("Testo non valido"); showToast("Errore importazione","error"); }
   }
 
-  /* ── calendar helpers ── */
   const calMonth=calDate.getMonth(), calYear2=calDate.getFullYear();
   const dIM=new Date(calYear2,calMonth+1,0).getDate();
   const firstDay=new Date(calYear2,calMonth,1).getDay();
@@ -268,7 +256,6 @@ export default function App() {
     return {bks,mts};
   }
 
-  /* ── stats helpers ── */
   function occupancyPct(aptId,year,month){
     const dim=daysInMonth(year,month); let occ=0;
     for(let d=0;d<dim;d++){ const iso=toISO(new Date(year,month,d+1)); if(bookings.some(b=>(aptId==="all"||b.apt===aptId)&&iso>=b.checkin&&iso<b.checkout)) occ++; }
@@ -347,7 +334,7 @@ export default function App() {
               <div style={{marginLeft:"auto",textAlign:"right"}}><div style={{fontSize:9,color:"#999"}}>NOTTI</div><div style={{color:"#C8A96E"}}>{n}</div></div>
             </div>
             {prc>0&&<div style={{fontSize:16,fontWeight:"bold",color:"#4CAF8A",marginBottom:4}}>€{fmtEur(prc)}<span style={{fontSize:11,color:"#7EC8E3",marginLeft:8}}>~€{fmtEur(prc*taxMult)} netto</span></div>}
-            {prc>0&&n>0&&<div style={{fontSize:12,color:"#FFB347",marginBottom:4}}>€{fmtEur(prc/n)}/notte · €{fmtEur(prc*taxMult/n)}/notte netto</div>}
+            {prc>0&&n>0&&<div style={{fontSize:12,color:"#FFB347",marginBottom:8}}>€{fmtEur(prc/n)}/notte · €{fmtEur(prc*taxMult/n)}/notte netto</div>}
             {b.guests&&<div style={{fontSize:12,color:"#aaa",marginBottom:4}}>Ospiti: {b.guests}</div>}
             {b.notes&&<div style={{fontSize:12,color:"#aaa",fontStyle:"italic",borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:8,marginTop:8}}>{b.notes}</div>}
             {b.createdAt&&<div style={{fontSize:11,color:"#555",marginTop:8}}>📅 Inserita il: {fmtDate(parseDate(b.createdAt))}</div>}
@@ -528,6 +515,11 @@ export default function App() {
                       <div style={{fontSize:10,marginTop:3,padding:"2px 6px",borderRadius:8,display:"inline-block",background:b.status==="tentative"?"rgba(200,169,110,0.2)":"rgba(76,175,138,0.2)",color:b.status==="tentative"?"#C8A96E":"#4CAF8A"}}>{b.status==="tentative"?"Provvisoria":"Confermata"}</div>
                     </div>
                   </div>
+                  {/* ── RIGA €/NOTTE VISIBILE SEMPRE ── */}
+                  {prc>0&&n>0&&<div style={{background:"rgba(255,179,71,0.1)",border:"1px solid rgba(255,179,71,0.25)",borderRadius:8,padding:"6px 10px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:11,color:"#FFB347"}}>Media per notte</span>
+                    <span style={{fontSize:13,fontWeight:"bold",color:"#FFB347"}}>€{fmtEur(prc/n)} <span style={{fontSize:10,color:"#7EC8E3",fontWeight:"normal"}}>· €{fmtEur(prc*taxMult/n)} netto</span></span>
+                  </div>}
                   <div style={{display:"flex",gap:12,fontSize:13,marginBottom:4}}>
                     <div><div style={{fontSize:9,color:"#999"}}>CHECK-IN</div>{fmtDate(parseDate(b.checkin))}</div>
                     <div style={{color:"#555",alignSelf:"flex-end"}}>→</div>
@@ -685,10 +677,7 @@ export default function App() {
               })()}
             </div>
             {(()=>{
-              const ntsEff=bksFilt.reduce((s,b)=>{
-                const n=nights(parseDate(b.checkin),parseDate(b.checkout));
-                return s+(b.apt==="villacaterina"?n*4:n);
-              },0);
+              const ntsEff=bksFilt.reduce((s,b)=>{const n=nights(parseDate(b.checkin),parseDate(b.checkout)); return s+(b.apt==="villacaterina"?n*4:n);},0);
               const avgNight=ntsEff>0?totRev/ntsEff:0;
               return <div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.12)"}}>
                 <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>💰 Ricavo medio per notte — {periodLabel}</div>
