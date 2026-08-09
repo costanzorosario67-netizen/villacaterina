@@ -784,7 +784,15 @@ export default function App() {
               <div style={{flex:1}}><div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:10}}>Check-in</div><input type="date" value={form.checkin} onChange={e=>setForm(f=>({...f,checkin:e.target.value}))} style={S.input}/></div>
               <div style={{flex:1}}><div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:10}}>Check-out</div><input type="date" value={form.checkout} onChange={e=>setForm(f=>({...f,checkout:e.target.value}))} style={S.input}/></div>
             </div>
-            {form.checkin&&form.checkout&&parseDate(form.checkout)>parseDate(form.checkin)&&<div style={{textAlign:"center",color:"#C8A96E",fontSize:12,margin:"4px 0 8px"}}>{nights(parseDate(form.checkin),parseDate(form.checkout))} notti</div>}
+            {form.checkin&&form.checkout&&parseDate(form.checkout)>parseDate(form.checkin)&&(()=>{
+              const n=nights(parseDate(form.checkin),parseDate(form.checkout));
+              const prc=parseFloat(form.price)||0;
+              return <div style={{textAlign:"center",margin:"4px 0 8px"}}>
+                <span style={{color:"#C8A96E",fontSize:12}}>{n} notti</span>
+                {prc>0&&<span style={{color:"#4CAF8A",fontSize:12,marginLeft:12}}>· €{fmtEur(prc/n)}/notte</span>}
+                {prc>0&&<span style={{color:"#7EC8E3",fontSize:12,marginLeft:8}}>· €{fmtEur(prc*taxMult/n)}/notte netto</span>}
+              </div>;
+            })()}
             <div style={{display:"flex",gap:8}}>
               <div style={{flex:1}}><div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:10}}>Prezzo (€)</div><input type="number" value={form.price} onChange={e=>setForm(f=>({...f,price:e.target.value}))} placeholder="0" style={S.input}/></div>
               <div style={{flex:1}}><div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:10}}>Ospiti</div><input type="number" value={form.guests} onChange={e=>setForm(f=>({...f,guests:e.target.value}))} placeholder="1" style={S.input}/></div>
