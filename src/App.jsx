@@ -515,7 +515,7 @@ export default function App() {
                 const prc=parseFloat(b.price)||0;
                 const dl=Math.round((parseDate(b.checkout)-new Date())/86400000);
                 const soon=dl>=0&&dl<=7;
-                return <div key={b.id} style={{background:"rgba(255,255,255,0.05)",borderRadius:11,padding:13,marginBottom:9,borderLeft:`4px solid ${a?a.color:"#888"}`,outline:soon?"1px solid rgba(255,107,107,0.3)":"none"}}>
+                return <div key={b.id} onClick={()=>setViewBooking(b)} style={{background:"rgba(255,255,255,0.05)",borderRadius:11,padding:13,marginBottom:9,borderLeft:`4px solid ${a?a.color:"#888"}`,outline:soon?"1px solid rgba(255,107,107,0.3)":"none",cursor:"pointer"}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
                     <div>
                       <div style={{fontSize:15,fontWeight:"bold"}}>{b.guest}{soon&&<span style={{marginLeft:6,fontSize:10,color:"#FF6B6B",background:"rgba(255,107,107,0.15)",padding:"1px 6px",borderRadius:8}}>⏰ {dl===0?"oggi":dl===1?"domani":`tra ${dl}gg`}</span>}</div>
