@@ -634,10 +634,30 @@ export default function App() {
             </div>
 
             {/* Totale anno */}
-            <div style={{display:"flex",gap:8,marginBottom:14}}>
-              <div style={S.card}><div style={{fontSize:16,fontWeight:"bold",color:"#FF6B6B"}}>€{fmtEur(totCostYear)}</div><div style={{fontSize:9,color:"#999"}}>COSTI ANNO {costsYear}</div></div>
-              <div style={S.card}><div style={{fontSize:16,fontWeight:"bold",color:"#ffd580"}}>€{fmtEur(totCostMonth)}</div><div style={{fontSize:9,color:"#999"}}>COSTI {MONTHS_SHORT[costsMonth]}</div></div>
-            </div>
+            {(()=>{
+              const maintYear=maints.filter(m=>{const d=parseDate(m.date);return d&&d.getFullYear()===costsYear;}).reduce((s,m)=>s+(parseFloat(m.cost)||0),0);
+              const maintMonth=maints.filter(m=>{const d=parseDate(m.date);return d&&d.getFullYear()===costsYear&&d.getMonth()===costsMonth;}).reduce((s,m)=>s+(parseFloat(m.cost)||0),0);
+              const totAnno=totCostYear+maintYear;
+              const totMese=totCostMonth+maintMonth;
+              return <>
+                <div style={{display:"flex",gap:8,marginBottom:8}}>
+                  <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#FF6B6B"}}>€{fmtEur(totCostYear)}</div><div style={{fontSize:9,color:"#999"}}>UTENZE ANNO</div></div>
+                  <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#ffd580"}}>€{fmtEur(maintYear)}</div><div style={{fontSize:9,color:"#999"}}>MANUT. ANNO</div></div>
+                </div>
+                <div style={{background:"rgba(255,100,100,0.1)",border:"1px solid rgba(255,100,100,0.3)",borderRadius:10,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontSize:12,color:"#FF6B6B"}}>🔴 Totale costi anno {costsYear}</span>
+                  <span style={{fontSize:18,fontWeight:"bold",color:"#FF6B6B"}}>€{fmtEur(totAnno)}</span>
+                </div>
+                <div style={{display:"flex",gap:8,marginBottom:8}}>
+                  <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#FF6B6B"}}>€{fmtEur(totCostMonth)}</div><div style={{fontSize:9,color:"#999"}}>UTENZE {MONTHS_SHORT[costsMonth]}</div></div>
+                  <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#ffd580"}}>€{fmtEur(maintMonth)}</div><div style={{fontSize:9,color:"#999"}}>MANUT. {MONTHS_SHORT[costsMonth]}</div></div>
+                </div>
+                <div style={{background:"rgba(255,150,50,0.1)",border:"1px solid rgba(255,150,50,0.3)",borderRadius:10,padding:"12px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontSize:12,color:"#FFB347"}}>🟠 Totale costi {MONTHS[costsMonth]}</span>
+                  <span style={{fontSize:18,fontWeight:"bold",color:"#FFB347"}}>€{fmtEur(totMese)}</span>
+                </div>
+              </>;
+            })()}
 
             {/* Grafico mensile costi vs ricavi */}
             {(()=>{
