@@ -16,11 +16,11 @@ const firebaseApp = initializeApp(firebaseConfig);
 const db = getDatabase(firebaseApp);
 
 const DEFAULT_APARTMENTS = [
-  { id: "zaffiro",      name: "Zaffiro",        color: "#4A9FD4", emoji: "💙" },
-  { id: "diamante",     name: "Diamante",       color: "#A0A8B0", emoji: "🩶" },
-  { id: "rubino",       name: "Rubino",         color: "#D94F5C", emoji: "❤️" },
-  { id: "smeraldo",     name: "Smeraldo",       color: "#4CAF8A", emoji: "💚" },
-  { id: "villacaterina",name: "Villa Caterina", color: "#9B72CF", emoji: "🏰" },
+  { id:"zaffiro",       name:"Zaffiro",        color:"#4A9FD4", emoji:"💙" },
+  { id:"diamante",      name:"Diamante",       color:"#A0A8B0", emoji:"🩶" },
+  { id:"rubino",        name:"Rubino",         color:"#D94F5C", emoji:"❤️" },
+  { id:"smeraldo",      name:"Smeraldo",       color:"#4CAF8A", emoji:"💚" },
+  { id:"villacaterina", name:"Villa Caterina", color:"#9B72CF", emoji:"🏰" },
 ];
 const PLATFORMS = [
   { id:"airbnb",   label:"Airbnb",      emoji:"🏠", color:"#FF5A5F" },
@@ -41,6 +41,20 @@ const MAINT_TYPES = [
   { id:"ac",       label:"Climatizzatore", emoji:"❄️" },
   { id:"other",    label:"Altro",          emoji:"🛠️" },
 ];
+
+// Categorie costi
+const COST_TYPES_MONTHLY = [
+  { id:"energia",  label:"Energia",  emoji:"⚡", color:"#FFC72C" },
+  { id:"acqua",    label:"Acqua",    emoji:"💧", color:"#4A9FD4" },
+  { id:"internet", label:"Internet", emoji:"🌐", color:"#4CAF8A" },
+  { id:"mutuo",    label:"Mutuo",    emoji:"🏦", color:"#9B72CF" },
+];
+const COST_TYPES_ANNUAL = [
+  { id:"assicurazione", label:"Assicurazione", emoji:"🏠", color:"#FFB347" },
+  { id:"tasse",         label:"Tasse comunali", emoji:"🏛️", color:"#D94F5C" },
+];
+const ALL_COST_TYPES = [...COST_TYPES_MONTHLY, ...COST_TYPES_ANNUAL];
+
 const MONTHS       = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const MONTHS_SHORT = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
 const DAYS_SHORT   = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
@@ -57,6 +71,7 @@ const bkYear  = b => { const c=parseDate(b.checkout); return c?c.getFullYear():n
 const bkMonth = b => { const c=parseDate(b.checkout); return c?c.getMonth():null; };
 const emptyForm  = () => ({ apt:DEFAULT_APARTMENTS[0].id, guest:"", checkin:"", checkout:"", price:"", guests:"", notes:"", platform:"diretto", status:"confirmed", createdAt:"" });
 const emptyMForm = () => ({ apt:"all", type:"garden", date:"", notes:"", cost:"" });
+const emptyCForm = () => ({ apt:"all", type:"energia", year:new Date().getFullYear(), month:new Date().getMonth(), amount:"", notes:"", isAnnual:false });
 
 const S = {
   input:  { width:"100%", background:"rgba(255,255,255,0.07)", border:"1px solid rgba(200,169,110,0.3)", borderRadius:8, padding:"10px 12px", color:"#f0e6d3", fontSize:14, fontFamily:"Georgia,serif", outline:"none", boxSizing:"border-box", marginBottom:4 },
@@ -69,7 +84,7 @@ function Pill({ active, color, onClick, children }) {
   return <button onClick={onClick} style={{ padding:"5px 11px", borderRadius:20, border:active?"none":`1px solid ${color}44`, background:active?color:"rgba(255,255,255,0.06)", color:active?"#1a0533":"#f0e6d3", cursor:"pointer", fontSize:12, fontFamily:"Georgia,serif", whiteSpace:"nowrap" }}>{children}</button>;
 }
 function TabBtn({ active, onClick, label, children }) {
-  return <button onClick={onClick} style={{ display:"flex", flexDirection:"column", alignItems:"center", background:"none", border:"none", color:active?"#C8A96E":"#555", cursor:"pointer", minWidth:48, fontFamily:"Georgia,serif", gap:2 }}><span style={{fontSize:18}}>{children}</span><span style={{fontSize:9}}>{label}</span></button>;
+  return <button onClick={onClick} style={{ display:"flex", flexDirection:"column", alignItems:"center", background:"none", border:"none", color:active?"#C8A96E":"#555", cursor:"pointer", minWidth:44, fontFamily:"Georgia,serif", gap:2 }}><span style={{fontSize:18}}>{children}</span><span style={{fontSize:9}}>{label}</span></button>;
 }
 
 function openGCal(b, name) {
@@ -90,6 +105,7 @@ export default function App() {
   const [aptNames, setAptNames] = useState(() => Object.fromEntries(DEFAULT_APARTMENTS.map(a=>[a.id,a.name])));
   const [bookings, setBookings] = useState([]);
   const [maints, setMaints]     = useState([]);
+  const [costs, setCosts]       = useState([]);
   const [taxRate, setTaxRate]   = useState(0);
   const [costRate, setCostRate] = useState(0);
   const [view, setView]         = useState("calendar");
@@ -98,10 +114,13 @@ export default function App() {
   const [selApt, setSelApt]     = useState("all");
   const [form, setForm]         = useState(emptyForm());
   const [mForm, setMForm]       = useState(emptyMForm());
+  const [cForm, setCForm]       = useState(emptyCForm());
   const [editId, setEditId]     = useState(null);
   const [editMId, setEditMId]   = useState(null);
+  const [editCId, setEditCId]   = useState(null);
   const [delId, setDelId]       = useState(null);
   const [delMId, setDelMId]     = useState(null);
+  const [delCId, setDelCId]     = useState(null);
   const [toast, setToast]       = useState(null);
   const [loading, setLoading]   = useState(true);
   const [syncing, setSyncing]   = useState(false);
@@ -124,46 +143,47 @@ export default function App() {
   const [importText, setImportText]   = useState("");
   const [hideAmounts, setHideAmounts] = useState(false);
   const [listFilter, setListFilter]   = useState("all");
+  const [costsYear, setCostsYear]     = useState(new Date().getFullYear());
+  const [costsMonth, setCostsMonth]   = useState(new Date().getMonth());
   const [aiLoading, setAiLoading]     = useState(false);
   const [aiError, setAiError]         = useState(null);
   const fileInputRef = useRef(null);
 
   function toggleSelApt(id) {
-    if (id==="all") { setSelApt("all"); return; }
-    setSelApt(prev => { const arr=prev==="all"?[]:[...prev]; if(arr.includes(id)){ const n=arr.filter(x=>x!==id); return n.length===0?"all":n; } return [...arr,id]; });
+    if(id==="all"){setSelApt("all");return;}
+    setSelApt(prev=>{const arr=prev==="all"?[]:[...prev];if(arr.includes(id)){const n=arr.filter(x=>x!==id);return n.length===0?"all":n;}return[...arr,id];});
   }
   const isAptSel = id => selApt==="all"||selApt.includes(id);
   const isAllSel = ()  => selApt==="all";
-
   function toggleStatsApt(id) {
-    if(id==="all"){ setStatsApts(["all"]); return; }
-    setStatsApts(prev => { const wo=prev.filter(x=>x!=="all"); if(wo.includes(id)){ const n=wo.filter(x=>x!==id); return n.length===0?["all"]:n; } return [...wo,id]; });
+    if(id==="all"){setStatsApts(["all"]);return;}
+    setStatsApts(prev=>{const wo=prev.filter(x=>x!=="all");if(wo.includes(id)){const n=wo.filter(x=>x!==id);return n.length===0?["all"]:n;}return[...wo,id];});
   }
 
-  useEffect(() => {
-    const bRef = ref(db, "bookings");
-    const mRef = ref(db, "maints");
-    const sRef = ref(db, "settings");
-    const u1 = onValue(bRef, snap => { if(snap.exists()) setBookings(Object.values(snap.val())); setLoading(false); });
-    const u2 = onValue(mRef, snap => { if(snap.exists()) setMaints(Object.values(snap.val())); });
-    const u3 = onValue(sRef, snap => {
+  useEffect(()=>{
+    const bRef=ref(db,"bookings"), mRef=ref(db,"maints"), sRef=ref(db,"settings"), cRef=ref(db,"costs");
+    const u1=onValue(bRef,snap=>{if(snap.exists())setBookings(Object.values(snap.val()));setLoading(false);});
+    const u2=onValue(mRef,snap=>{if(snap.exists())setMaints(Object.values(snap.val()));});
+    const u3=onValue(sRef,snap=>{
       if(snap.exists()){
         const s=snap.val();
-        if(s.aptNames){ setAptNames(s.aptNames); setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:s.aptNames[a.id]||a.name}))); }
-        if(s.taxRate!==undefined) setTaxRate(s.taxRate);
-        if(s.costRate!==undefined) setCostRate(s.costRate);
-        if(s.anthropicKey) setAnthropicKey(s.anthropicKey);
-        if(s.adminPin) setAdminPin(s.adminPin);
-      } else { setLoading(false); }
+        if(s.aptNames){setAptNames(s.aptNames);setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:s.aptNames[a.id]||a.name})));}
+        if(s.taxRate!==undefined)setTaxRate(s.taxRate);
+        if(s.costRate!==undefined)setCostRate(s.costRate);
+        if(s.anthropicKey)setAnthropicKey(s.anthropicKey);
+        if(s.adminPin)setAdminPin(s.adminPin);
+      }else{setLoading(false);}
     });
-    return () => { u1(); u2(); u3(); };
-  }, []);
+    const u4=onValue(cRef,snap=>{if(snap.exists())setCosts(Object.values(snap.val()));});
+    return()=>{u1();u2();u3();u4();};
+  },[]);
 
-  async function saveBookings(nb){ setSyncing(true); try{ const obj=Object.fromEntries(nb.map(b=>[b.id,b])); await set(ref(db,"bookings"),obj); }catch(e){ showToast("Errore sync","error"); }finally{ setSyncing(false); } }
-  async function saveMaints(nm){ try{ const obj=Object.fromEntries(nm.map(m=>[m.id,m])); await set(ref(db,"maints"),obj); }catch(e){} }
-  async function saveSettings(names,tax,cost,akey,apin){ try{ await set(ref(db,"settings"),{aptNames:names,taxRate:tax,costRate:cost,anthropicKey:akey,adminPin:apin}); }catch(e){} }
+  async function saveBookings(nb){setSyncing(true);try{await set(ref(db,"bookings"),Object.fromEntries(nb.map(b=>[b.id,b])));}catch(e){showToast("Errore sync","error");}finally{setSyncing(false);}}
+  async function saveMaints(nm){try{await set(ref(db,"maints"),Object.fromEntries(nm.map(m=>[m.id,m])));}catch(e){}}
+  async function saveCosts(nc){try{await set(ref(db,"costs"),Object.fromEntries(nc.map(c=>[c.id,c])));}catch(e){}}
+  async function saveSettings(names,tax,cost,akey,apin){try{await set(ref(db,"settings"),{aptNames:names,taxRate:tax,costRate:cost,anthropicKey:akey,adminPin:apin});}catch(e){}}
 
-  function showToast(msg, type="success"){ setToast({msg,type}); setTimeout(()=>setToast(null),2800); }
+  function showToast(msg,type="success"){setToast({msg,type});setTimeout(()=>setToast(null),2800);}
 
   const aptColor = id => apts.find(a=>a.id===id)?.color||"#888";
   const aptEmoji = id => apts.find(a=>a.id===id)?.emoji||"🏠";
@@ -173,116 +193,149 @@ export default function App() {
   const platLabel = id => PLATFORMS.find(p=>p.id===id)?.label||id;
   const mtEmoji  = t => MAINT_TYPES.find(m=>m.id===t)?.emoji||"🛠️";
   const mtLabel  = t => MAINT_TYPES.find(m=>m.id===t)?.label||t;
+  const ctInfo   = t => ALL_COST_TYPES.find(c=>c.id===t)||{emoji:"💰",label:t,color:"#888"};
   const taxMult  = (100-(parseFloat(taxRate)||0)-(parseFloat(costRate)||0))/100;
   const fmtEur   = v => hideAmounts?"••••":(Math.round(v*100)/100).toLocaleString("it-IT",{minimumFractionDigits:2,maximumFractionDigits:2});
 
-  async function handleSave(){
-    if(!form.guest.trim()||!form.checkin||!form.checkout){ showToast("Compila ospite, check-in e check-out","error"); return; }
-    if(parseDate(form.checkout)<=parseDate(form.checkin)){ showToast("Checkout deve essere dopo check-in","error"); return; }
-    let nb = editId!==null ? bookings.map(b=>b.id===editId?{...b,...form,id:editId}:b) : [...bookings,{...form,id:Date.now(),createdAt:form.createdAt||todayISO()}];
-    showToast(editId!==null?"Aggiornata":"Salvata"); setEditId(null);
-    setBookings(nb); await saveBookings(nb); setForm(emptyForm()); setView("list");
+  // Calcola costi effettivi per mese (annuali spalmati /12)
+  function costsForMonth(year, month, aptId="all") {
+    let total = 0;
+    costs.forEach(c => {
+      const amt = parseFloat(c.amount)||0;
+      if(aptId!=="all" && c.apt!=="all" && c.apt!==aptId) return;
+      const isAnnual = COST_TYPES_ANNUAL.some(t=>t.id===c.type);
+      if(isAnnual) {
+        if(c.year===year) total += amt/12;
+      } else {
+        if(c.year===year && c.month===month) total += amt;
+      }
+    });
+    return total;
   }
-  function handleEdit(b){ setForm({apt:b.apt,guest:b.guest,checkin:b.checkin,checkout:b.checkout,price:b.price,guests:b.guests||"",notes:b.notes||"",platform:b.platform||"diretto",status:b.status||"confirmed",createdAt:b.createdAt||""}); setEditId(b.id); setView("add"); }
-  async function handleDel(id){ const nb=bookings.filter(b=>b.id!==id); setBookings(nb); await saveBookings(nb); setDelId(null); showToast("Eliminata"); }
+  function costsForYear(year, aptId="all") {
+    let total = 0;
+    for(let m=0;m<12;m++) total += costsForMonth(year,m,aptId);
+    return total;
+  }
+
+  async function handleSave(){
+    if(!form.guest.trim()||!form.checkin||!form.checkout){showToast("Compila ospite, check-in e check-out","error");return;}
+    if(parseDate(form.checkout)<=parseDate(form.checkin)){showToast("Checkout deve essere dopo check-in","error");return;}
+    let nb=editId!==null?bookings.map(b=>b.id===editId?{...b,...form,id:editId}:b):[...bookings,{...form,id:Date.now(),createdAt:form.createdAt||todayISO()}];
+    showToast(editId!==null?"Aggiornata":"Salvata");setEditId(null);
+    setBookings(nb);await saveBookings(nb);setForm(emptyForm());setView("list");
+  }
+  function handleEdit(b){setForm({apt:b.apt,guest:b.guest,checkin:b.checkin,checkout:b.checkout,price:b.price,guests:b.guests||"",notes:b.notes||"",platform:b.platform||"diretto",status:b.status||"confirmed",createdAt:b.createdAt||""});setEditId(b.id);setView("add");}
+  async function handleDel(id){const nb=bookings.filter(b=>b.id!==id);setBookings(nb);await saveBookings(nb);setDelId(null);showToast("Eliminata");}
 
   async function handleMSave(){
-    if(!mForm.date){ showToast("Inserisci la data","error"); return; }
-    let nm = editMId!==null ? maints.map(m=>m.id===editMId?{...m,...mForm,id:editMId}:m) : [...maints,{...mForm,id:Date.now()}];
-    showToast(editMId!==null?"Aggiornata":"Salvata"); setEditMId(null);
-    setMaints(nm); await saveMaints(nm); setMForm(emptyMForm()); setView("list");
+    if(!mForm.date){showToast("Inserisci la data","error");return;}
+    let nm=editMId!==null?maints.map(m=>m.id===editMId?{...m,...mForm,id:editMId}:m):[...maints,{...mForm,id:Date.now()}];
+    showToast(editMId!==null?"Aggiornata":"Salvata");setEditMId(null);
+    setMaints(nm);await saveMaints(nm);setMForm(emptyMForm());setView("list");
   }
-  function handleMEdit(m){ setMForm({apt:m.apt,type:m.type,date:m.date,notes:m.notes||"",cost:m.cost||""}); setEditMId(m.id); setView("addMaint"); }
-  async function handleMDel(id){ const nm=maints.filter(m=>m.id!==id); setMaints(nm); await saveMaints(nm); setDelMId(null); showToast("Eliminata"); }
+  function handleMEdit(m){setMForm({apt:m.apt,type:m.type,date:m.date,notes:m.notes||"",cost:m.cost||""});setEditMId(m.id);setView("addMaint");}
+  async function handleMDel(id){const nm=maints.filter(m=>m.id!==id);setMaints(nm);await saveMaints(nm);setDelMId(null);showToast("Eliminata");}
+
+  async function handleCSave(){
+    if(!cForm.amount){showToast("Inserisci l'importo","error");return;}
+    const isAnnual=COST_TYPES_ANNUAL.some(t=>t.id===cForm.type);
+    const entry={...cForm,id:editCId||Date.now(),isAnnual,amount:parseFloat(cForm.amount)};
+    let nc=editCId!==null?costs.map(c=>c.id===editCId?entry:c):[...costs,entry];
+    showToast(editCId!==null?"Aggiornato":"Salvato");setEditCId(null);
+    setCosts(nc);await saveCosts(nc);setCForm(emptyCForm());setView("costs");
+  }
+  function handleCEdit(c){setCForm({apt:c.apt,type:c.type,year:c.year,month:c.month,amount:String(c.amount),notes:c.notes||"",isAnnual:c.isAnnual});setEditCId(c.id);setView("addCost");}
+  async function handleCDel(id){const nc=costs.filter(c=>c.id!==id);setCosts(nc);await saveCosts(nc);setDelCId(null);showToast("Eliminato");}
 
   async function handleFileUpload(e) {
-    const file = e.target.files?.[0]; if (!file) return;
-    setAiError(null); setAiLoading(true);
-    try {
-      const base64 = await new Promise((res, rej) => { const r=new FileReader(); r.onload=()=>res(r.result.split(",")[1]); r.onerror=()=>rej(); r.readAsDataURL(file); });
-      const isPdf = file.type==="application/pdf";
-      const mediaType = isPdf?"application/pdf":(file.type||"image/jpeg");
-      const contentBlock = isPdf ? {type:"document",source:{type:"base64",media_type:mediaType,data:base64}} : {type:"image",source:{type:"base64",media_type:mediaType,data:base64}};
-      const platIds=PLATFORMS.map(p=>p.id).join("|"); const aptIds=apts.map(a=>a.id).join("|");
-      const prompt=`Questo documento è una conferma di prenotazione affitto breve. Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun markdown. Formato esatto:\n{"guest":"nome cognome","checkin":"YYYY-MM-DD","checkout":"YYYY-MM-DD","price":0,"guests":0,"platform":"uno di: ${platIds}","apt":"uno di: ${aptIds} oppure stringa vuota","notes":""}\nSe un dato non è leggibile usa stringa vuota o 0. Le date devono essere in formato YYYY-MM-DD.`;
-      const res = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,messages:[{role:"user",content:[contentBlock,{type:"text",text:prompt}]}]})});
-      if(!res.ok) throw new Error();
-      const data=await res.json(); if(data.error) throw new Error();
-      const rawText=(data.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("").trim();
-      const parsed=JSON.parse(rawText.replace(/```json|```/g,"").trim());
+    const file=e.target.files?.[0];if(!file)return;
+    setAiError(null);setAiLoading(true);
+    try{
+      const base64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=()=>rej();r.readAsDataURL(file);});
+      const isPdf=file.type==="application/pdf";
+      const mediaType=isPdf?"application/pdf":(file.type||"image/jpeg");
+      const contentBlock=isPdf?{type:"document",source:{type:"base64",media_type:mediaType,data:base64}}:{type:"image",source:{type:"base64",media_type:mediaType,data:base64}};
+      const platIds=PLATFORMS.map(p=>p.id).join("|");const aptIds=apts.map(a=>a.id).join("|");
+      const prompt=`Questo documento è una conferma di prenotazione affitto breve. Rispondi SOLO con JSON valido, nessun testo aggiuntivo, nessun markdown. Formato esatto:\n{"guest":"nome cognome","checkin":"YYYY-MM-DD","checkout":"YYYY-MM-DD","price":0,"guests":0,"platform":"uno di: ${platIds}","apt":"uno di: ${aptIds} oppure stringa vuota","notes":""}\nSe un dato non è leggibile usa stringa vuota o 0.`;
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,messages:[{role:"user",content:[contentBlock,{type:"text",text:prompt}]}]})});
+      if(!res.ok)throw new Error();
+      const data=await res.json();if(data.error)throw new Error();
+      const parsed=JSON.parse((data.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("").trim().replace(/```json|```/g,"").trim());
       setForm(f=>({...f,guest:parsed.guest||f.guest,checkin:parsed.checkin||f.checkin,checkout:parsed.checkout||f.checkout,price:parsed.price&&parsed.price!==0?String(parsed.price):f.price,guests:parsed.guests&&parsed.guests!==0?String(parsed.guests):f.guests,platform:PLATFORMS.some(p=>p.id===parsed.platform)?parsed.platform:f.platform,apt:apts.some(a=>a.id===parsed.apt)?parsed.apt:f.apt,notes:parsed.notes||f.notes}));
       showToast("Dati estratti ✓ Verifica e salva");
-    } catch(err){ setAiError("Non riesco a leggere il documento."); }
-    finally{ setAiLoading(false); if(fileInputRef.current) fileInputRef.current.value=""; }
+    }catch(err){setAiError("Non riesco a leggere il documento.");}
+    finally{setAiLoading(false);if(fileInputRef.current)fileInputRef.current.value="";}
   }
 
   async function handleSaveSettings(){
     const nm=Object.fromEntries(DEFAULT_APARTMENTS.map(a=>[a.id,aptNames[a.id]||a.name]));
     setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:nm[a.id]})));
-    const pinToSave = newPin.length>=4 ? newPin : adminPin;
-    if(newPin.length>0&&newPin.length<4){ showToast("PIN deve avere almeno 4 cifre","error"); return; }
-    if(newPin.length>=4) setAdminPin(newPin);
+    const pinToSave=newPin.length>=4?newPin:adminPin;
+    if(newPin.length>0&&newPin.length<4){showToast("PIN deve avere almeno 4 cifre","error");return;}
+    if(newPin.length>=4)setAdminPin(newPin);
     setNewPin("");
     await saveSettings(nm,taxRate,costRate,anthropicKey,pinToSave);
-    showToast("Salvato"); setView("calendar");
+    showToast("Salvato");setView("calendar");
   }
 
   async function importFromText(text){
     try{
       const data=JSON.parse(text.trim());
-      if(!data.bookings||!data.maints) throw new Error();
-      setBookings(data.bookings); setMaints(data.maints);
-      if(data.aptNames){ setAptNames(data.aptNames); setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:data.aptNames[a.id]||a.name}))); }
-      if(data.taxRate!==undefined) setTaxRate(data.taxRate);
-      if(data.costRate!==undefined) setCostRate(data.costRate);
-      await saveBookings(data.bookings); await saveMaints(data.maints);
-      if(data.aptNames) await saveSettings(data.aptNames,data.taxRate||0,data.costRate||0);
-      setImportError(null); setImportText(""); showToast("Dati ripristinati ✓"); setView("calendar");
-    }catch{ setImportError("Testo non valido"); showToast("Errore importazione","error"); }
+      if(!data.bookings||!data.maints)throw new Error();
+      setBookings(data.bookings);setMaints(data.maints);
+      if(data.costs){setCosts(data.costs);await saveCosts(data.costs);}
+      if(data.aptNames){setAptNames(data.aptNames);setApts(DEFAULT_APARTMENTS.map(a=>({...a,name:data.aptNames[a.id]||a.name})));}
+      if(data.taxRate!==undefined)setTaxRate(data.taxRate);
+      if(data.costRate!==undefined)setCostRate(data.costRate);
+      await saveBookings(data.bookings);await saveMaints(data.maints);
+      if(data.aptNames)await saveSettings(data.aptNames,data.taxRate||0,data.costRate||0);
+      setImportError(null);setImportText("");showToast("Dati ripristinati ✓");setView("calendar");
+    }catch{setImportError("Testo non valido");showToast("Errore importazione","error");}
   }
 
-  const calMonth=calDate.getMonth(), calYear2=calDate.getFullYear();
+  const calMonth=calDate.getMonth(),calYear2=calDate.getFullYear();
   const dIM=new Date(calYear2,calMonth+1,0).getDate();
   const firstDay=new Date(calYear2,calMonth,1).getDay();
-  const weekStart=(()=>{ const r=new Date(calDate); r.setDate(r.getDate()-r.getDay()); return r; })();
+  const weekStart=(()=>{const r=new Date(calDate);r.setDate(r.getDate()-r.getDay());return r;})();
   const weekDays=Array.from({length:7},(_,i)=>addDays(weekStart,i));
   function navCal(dir){
-    if(calView==="month"){ let m=calDate.getMonth()+dir,y=calDate.getFullYear(); if(m<0){m=11;y--;} if(m>11){m=0;y++;} setCalDate(new Date(y,m,1)); }
-    else { setCalDate(d=>addDays(d,dir*7)); }
+    if(calView==="month"){let m=calDate.getMonth()+dir,y=calDate.getFullYear();if(m<0){m=11;y--;}if(m>11){m=0;y++;}setCalDate(new Date(y,m,1));}
+    else{setCalDate(d=>addDays(d,dir*7));}
   }
   function itemsForDay(iso){
     const bks=bookings.filter(b=>(isAllSel()||selApt.includes(b.apt))&&iso>=b.checkin&&iso<b.checkout);
     const mts=maints.filter(m=>(isAllSel()||m.apt==="all"||selApt.includes(m.apt))&&m.date===iso);
-    return {bks,mts};
+    return{bks,mts};
   }
 
   function occupancyPct(aptId,year,month){
-    const dim=daysInMonth(year,month); let occ=0;
-    for(let d=0;d<dim;d++){ const iso=toISO(new Date(year,month,d+1)); if(bookings.some(b=>(aptId==="all"||b.apt===aptId)&&iso>=b.checkin&&iso<b.checkout)) occ++; }
+    const dim=daysInMonth(year,month);let occ=0;
+    for(let d=0;d<dim;d++){const iso=toISO(new Date(year,month,d+1));if(bookings.some(b=>(aptId==="all"||b.apt===aptId)&&iso>=b.checkin&&iso<b.checkout))occ++;}
     return Math.round(occ/dim*100);
   }
-  function filterBks({ year, month, aptIds }){
+  function filterBks({year,month,aptIds}){
     return bookings.filter(b=>{
-      if(aptIds&&!aptIds.includes("all")&&!aptIds.includes(b.apt)) return false;
-      if(year!==undefined&&bkYear(b)!==year) return false;
-      if(month!==null&&month!==undefined&&bkMonth(b)!==month) return false;
+      if(aptIds&&!aptIds.includes("all")&&!aptIds.includes(b.apt))return false;
+      if(year!==undefined&&bkYear(b)!==year)return false;
+      if(month!==null&&month!==undefined&&bkMonth(b)!==month)return false;
       return true;
     });
   }
 
-  const filteredBookings = useMemo(()=>bookings.filter(b=>selApt==="all"||selApt.includes(b.apt)).sort((a,b)=>a.checkin.localeCompare(b.checkin)),[bookings,selApt]);
-  const filteredMaints   = useMemo(()=>maints.filter(m=>selApt==="all"||m.apt==="all"||selApt.includes(m.apt)).sort((a,b)=>a.date.localeCompare(b.date)),[maints,selApt]);
-  const upcomingCheckouts= useMemo(()=>{ const t=todayISO(),l=toISO(addDays(new Date(),7)); return bookings.filter(b=>b.checkout>=t&&b.checkout<=l).sort((a,b)=>a.checkout.localeCompare(b.checkout)); },[bookings]);
-  const upcomingCheckins = useMemo(()=>{ const t=todayISO(),l=toISO(addDays(new Date(),7)); return bookings.filter(b=>b.checkin>=t&&b.checkin<=l).sort((a,b)=>a.checkin.localeCompare(b.checkin)); },[bookings]);
+  const filteredBookings=useMemo(()=>bookings.filter(b=>selApt==="all"||selApt.includes(b.apt)).sort((a,b)=>a.checkin.localeCompare(b.checkin)),[bookings,selApt]);
+  const filteredMaints=useMemo(()=>maints.filter(m=>selApt==="all"||m.apt==="all"||selApt.includes(m.apt)).sort((a,b)=>a.date.localeCompare(b.date)),[maints,selApt]);
+  const upcomingCheckouts=useMemo(()=>{const t=todayISO(),l=toISO(addDays(new Date(),7));return bookings.filter(b=>b.checkout>=t&&b.checkout<=l).sort((a,b)=>a.checkout.localeCompare(b.checkout));},[bookings]);
+  const upcomingCheckins=useMemo(()=>{const t=todayISO(),l=toISO(addDays(new Date(),7));return bookings.filter(b=>b.checkin>=t&&b.checkin<=l).sort((a,b)=>a.checkin.localeCompare(b.checkin));},[bookings]);
 
   function handlePinSubmit(){
-    if(pinInput===adminPin){ setIsAdmin(true); setShowPinModal(false); setPinInput(""); setPinError(false); showToast("Accesso admin ✓"); }
-    else { setPinError(true); setPinInput(""); }
+    if(pinInput===adminPin){setIsAdmin(true);setShowPinModal(false);setPinInput("");setPinError(false);showToast("Accesso admin ✓");}
+    else{setPinError(true);setPinInput("");}
   }
 
-  if(loading) return <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1a0533,#0d1f3c,#0a2e1a)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif",color:"#C8A96E"}}><div style={{fontSize:40,marginBottom:12}}>🏰</div><div style={{fontSize:14,letterSpacing:2}}>Caricamento...</div></div>;
+  if(loading)return<div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1a0533,#0d1f3c,#0a2e1a)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif",color:"#C8A96E"}}><div style={{fontSize:40,marginBottom:12}}>🏰</div><div style={{fontSize:14,letterSpacing:2}}>Caricamento...</div></div>;
 
-  return (
+  return(
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#1a0533 0%,#0d1f3c 50%,#0a2e1a 100%)",fontFamily:"Georgia,serif",color:"#f0e6d3",overflowX:"hidden"}}>
 
       {showPinModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -301,29 +354,26 @@ export default function App() {
       {toast&&<div style={{position:"fixed",top:18,left:"50%",transform:"translateX(-50%)",background:toast.type==="error"?"#8B1A2A":"#1a4a2e",color:"#f0e6d3",padding:"11px 22px",borderRadius:8,zIndex:9999,fontSize:13,border:`1px solid ${toast.type==="error"?"#D94F5C":"#4CAF8E"}`,whiteSpace:"nowrap"}}>{toast.msg}</div>}
 
       {calExportOpen&&(()=>{
-        const b=bookings.find(x=>x.id===calExportOpen); if(!b) return null;
+        const b=bookings.find(x=>x.id===calExportOpen);if(!b)return null;
         const nm=aptLabel(b.apt);
-        return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setCalExportOpen(null)}>
+        return<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setCalExportOpen(null)}>
           <div style={{background:"#1a1a2e",border:"1px solid #C8A96E",borderRadius:14,padding:24,maxWidth:310,width:"88%"}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:16,color:"#C8A96E",marginBottom:4,textAlign:"center"}}>📅 Aggiungi al Calendario</div>
             <div style={{fontSize:12,color:"#999",textAlign:"center",marginBottom:18}}>Check-out di <strong style={{color:"#f0e6d3"}}>{b.guest}</strong><br/>{fmtDate(parseDate(b.checkout))} · {nm}</div>
-            <button onClick={()=>{ openGCal(b,nm); setCalExportOpen(null); }} style={{width:"100%",padding:"13px 0",marginBottom:10,borderRadius:10,border:"none",background:"#4285F4",color:"#fff",fontFamily:"Georgia,serif",fontSize:14,cursor:"pointer",fontWeight:"bold"}}>🗓 Google Calendar</button>
-            <button onClick={()=>{ downloadICS(b,nm); setCalExportOpen(null); }} style={{width:"100%",padding:"13px 0",borderRadius:10,border:"1px solid #C8A96E",background:"rgba(200,169,110,0.1)",color:"#C8A96E",fontFamily:"Georgia,serif",fontSize:14,cursor:"pointer",fontWeight:"bold"}}>🍎 Apple Calendar (.ics)</button>
+            <button onClick={()=>{openGCal(b,nm);setCalExportOpen(null);}} style={{width:"100%",padding:"13px 0",marginBottom:10,borderRadius:10,border:"none",background:"#4285F4",color:"#fff",fontFamily:"Georgia,serif",fontSize:14,cursor:"pointer",fontWeight:"bold"}}>🗓 Google Calendar</button>
+            <button onClick={()=>{downloadICS(b,nm);setCalExportOpen(null);}} style={{width:"100%",padding:"13px 0",borderRadius:10,border:"1px solid #C8A96E",background:"rgba(200,169,110,0.1)",color:"#C8A96E",fontFamily:"Georgia,serif",fontSize:14,cursor:"pointer",fontWeight:"bold"}}>🍎 Apple Calendar (.ics)</button>
             <button onClick={()=>setCalExportOpen(null)} style={{width:"100%",padding:"10px 0",marginTop:10,borderRadius:10,border:"none",background:"transparent",color:"#666",fontFamily:"Georgia,serif",fontSize:13,cursor:"pointer"}}>Annulla</button>
           </div>
         </div>;
       })()}
 
       {viewBooking&&(()=>{
-        const b=viewBooking; const a=apts.find(x=>x.id===b.apt); const n=nights(parseDate(b.checkin),parseDate(b.checkout)); const prc=parseFloat(b.price)||0;
-        return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:997,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setViewBooking(null)}>
+        const b=viewBooking;const a=apts.find(x=>x.id===b.apt);const n=nights(parseDate(b.checkin),parseDate(b.checkout));const prc=parseFloat(b.price)||0;
+        return<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:997,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setViewBooking(null)}>
           <div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:"14px 14px 0 0",padding:24,width:"100%",maxWidth:520}} onClick={e=>e.stopPropagation()}>
             <div style={{width:36,height:4,background:"#555",borderRadius:2,margin:"0 auto 18px"}}/>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-              <div>
-                <div style={{fontSize:17,fontWeight:"bold"}}>{b.guest}</div>
-                <div style={{fontSize:12,color:a?a.color:"#888"}}>{a?.emoji} {a?.name}</div>
-              </div>
+              <div><div style={{fontSize:17,fontWeight:"bold"}}>{b.guest}</div><div style={{fontSize:12,color:a?a.color:"#888"}}>{a?.emoji} {a?.name}</div></div>
               <div style={{padding:"3px 10px",borderRadius:8,background:b.status==="tentative"?"rgba(200,169,110,0.2)":"rgba(76,175,138,0.2)",color:b.status==="tentative"?"#C8A96E":"#4CAF8A",fontSize:12}}>{b.status==="tentative"?"Provvisoria":"Confermata"}</div>
             </div>
             {b.platform&&<div style={{marginBottom:10,display:"inline-block",padding:"3px 10px",borderRadius:10,background:platColor(b.platform)+"33",border:`1px solid ${platColor(b.platform)}66`,fontSize:12,color:platColor(b.platform)}}>{platEmoji(b.platform)} {platLabel(b.platform)}</div>}
@@ -350,6 +400,7 @@ export default function App() {
 
       {delId!==null&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:998,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:12,padding:28,maxWidth:300,width:"88%",textAlign:"center"}}><div style={{fontSize:28,marginBottom:10}}>🗑️</div><div style={{fontSize:15,marginBottom:22}}>Eliminare questa prenotazione?</div><div style={{display:"flex",gap:10,justifyContent:"center"}}><button onClick={()=>setDelId(null)} style={S.btn("#333","#888")}>Annulla</button><button onClick={()=>handleDel(delId)} style={S.btn("#8B1A2A","#D94F5C")}>Elimina</button></div></div></div>}
       {delMId!==null&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:998,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:12,padding:28,maxWidth:300,width:"88%",textAlign:"center"}}><div style={{fontSize:28,marginBottom:10}}>🗑️</div><div style={{fontSize:15,marginBottom:22}}>Eliminare questa manutenzione?</div><div style={{display:"flex",gap:10,justifyContent:"center"}}><button onClick={()=>setDelMId(null)} style={S.btn("#333","#888")}>Annulla</button><button onClick={()=>handleMDel(delMId)} style={S.btn("#8B1A2A","#D94F5C")}>Elimina</button></div></div></div>}
+      {delCId!==null&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:998,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"#1a0533",border:"1px solid #C8A96E",borderRadius:12,padding:28,maxWidth:300,width:"88%",textAlign:"center"}}><div style={{fontSize:28,marginBottom:10}}>🗑️</div><div style={{fontSize:15,marginBottom:22}}>Eliminare questo costo?</div><div style={{display:"flex",gap:10,justifyContent:"center"}}><button onClick={()=>setDelCId(null)} style={S.btn("#333","#888")}>Annulla</button><button onClick={()=>handleCDel(delCId)} style={S.btn("#8B1A2A","#D94F5C")}>Elimina</button></div></div></div>}
 
       <div style={{maxWidth:520,margin:"0 auto",paddingBottom:100}}>
 
@@ -361,14 +412,14 @@ export default function App() {
             <button onClick={()=>setHideAmounts(v=>!v)} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(200,169,110,0.3)",borderRadius:8,padding:"4px 12px",color:hideAmounts?"#FF6B6B":"#4CAF8A",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12}}>
               {hideAmounts?"🙈 Nascosti":"👁 Visibili"}
             </button>
-            {!isViewMode&&<button onClick={()=>{ if(isAdmin){setIsAdmin(false);showToast("Uscito da admin");} else setShowPinModal(true); }} style={{background:"rgba(255,255,255,0.07)",border:`1px solid ${isAdmin?"#C8A96E":"#555"}`,borderRadius:8,padding:"4px 12px",color:isAdmin?"#C8A96E":"#555",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12}}>
+            {!isViewMode&&<button onClick={()=>{if(isAdmin){setIsAdmin(false);showToast("Uscito da admin");}else setShowPinModal(true);}} style={{background:"rgba(255,255,255,0.07)",border:`1px solid ${isAdmin?"#C8A96E":"#555"}`,borderRadius:8,padding:"4px 12px",color:isAdmin?"#C8A96E":"#555",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12}}>
               {isAdmin?"🔓 Admin":"🔒 Admin"}
             </button>}
           </div>
           {syncing&&<div style={{fontSize:10,color:"#C8A96E",marginTop:4}}>⟳ Sincronizzazione...</div>}
         </div>
 
-        {!["add","addMaint","settings","stats"].includes(view)&&(
+        {!["add","addMaint","addCost","settings","stats"].includes(view)&&(
           <div style={{padding:"4px 12px 8px",display:"flex",gap:6,overflowX:"auto",scrollbarWidth:"none"}}>
             <Pill active={isAllSel()} color="#C8A96E" onClick={()=>toggleSelApt("all")}>Tutti</Pill>
             {apts.map(a=><Pill key={a.id} active={isAptSel(a.id)} color={a.color} onClick={()=>toggleSelApt(a.id)}>{a.emoji} {a.name}</Pill>)}
@@ -382,7 +433,7 @@ export default function App() {
               {upcomingCheckouts.map(b=>{
                 const dl=Math.round((parseDate(b.checkout)-new Date())/86400000);
                 const lbl=b.checkout===todayISO()?"OGGI":b.checkout===toISO(addDays(new Date(),1))?"DOMANI":`tra ${dl} giorni`;
-                return <div key={b.id} onClick={()=>setViewBooking(b)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,0.06)",cursor:"pointer"}}>
+                return<div key={b.id} onClick={()=>setViewBooking(b)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,0.06)",cursor:"pointer"}}>
                   <div><div style={{fontSize:13,fontWeight:"bold"}}>{b.guest}</div><div style={{fontSize:11,color:aptColor(b.apt)}}>{aptEmoji(b.apt)} {aptLabel(b.apt)}</div></div>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:11,fontWeight:"bold",color:"#FF6B6B",padding:"3px 8px",borderRadius:8,background:"rgba(255,107,107,0.15)"}}>{lbl}</span>
@@ -396,7 +447,7 @@ export default function App() {
               {upcomingCheckins.map(b=>{
                 const dl=Math.round((parseDate(b.checkin)-new Date())/86400000);
                 const lbl=b.checkin===todayISO()?"OGGI":b.checkin===toISO(addDays(new Date(),1))?"DOMANI":`tra ${dl} giorni`;
-                return <div key={b.id} onClick={()=>setViewBooking(b)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,0.06)",cursor:"pointer"}}>
+                return<div key={b.id} onClick={()=>setViewBooking(b)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,0.06)",cursor:"pointer"}}>
                   <div><div style={{fontSize:13,fontWeight:"bold"}}>{b.guest}</div><div style={{fontSize:11,color:aptColor(b.apt)}}>{aptEmoji(b.apt)} {aptLabel(b.apt)}</div></div>
                   <span style={{fontSize:11,fontWeight:"bold",color:"#4CAF8A",padding:"3px 8px",borderRadius:8,background:"rgba(76,175,138,0.15)"}}>{lbl}</span>
                 </div>;
@@ -405,6 +456,7 @@ export default function App() {
           </div>
         )}
 
+        {/* ══ CALENDAR ══ */}
         {view==="calendar"&&(
           <div style={{padding:"0 12px"}}>
             <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:10}}>
@@ -413,11 +465,11 @@ export default function App() {
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
               <button onClick={()=>navCal(-1)} style={S.navBtn}>‹</button>
               {calView==="month"
-                ? <div style={{display:"flex",gap:6}}>
-                    <select value={calMonth} onChange={e=>setCalDate(new Date(calYear2,+e.target.value,1))} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(200,169,110,0.3)",borderRadius:7,padding:"4px 8px",color:"#C8A96E",fontFamily:"Georgia,serif",fontSize:14,cursor:"pointer",outline:"none"}}>{MONTHS.map((m,i)=><option key={i} value={i} style={{background:"#1a0533"}}>{m}</option>)}</select>
-                    <select value={calYear2} onChange={e=>setCalDate(new Date(+e.target.value,calMonth,1))} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(200,169,110,0.3)",borderRadius:7,padding:"4px 8px",color:"#C8A96E",fontFamily:"Georgia,serif",fontSize:14,cursor:"pointer",outline:"none"}}>{Array.from({length:6},(_,i)=>new Date().getFullYear()-1+i).map(y=><option key={y} value={y} style={{background:"#1a0533"}}>{y}</option>)}</select>
-                  </div>
-                : <div style={{fontSize:15,color:"#C8A96E"}}>{fmtDate(weekStart)} – {fmtDate(addDays(weekStart,6))}</div>
+                ?<div style={{display:"flex",gap:6}}>
+                  <select value={calMonth} onChange={e=>setCalDate(new Date(calYear2,+e.target.value,1))} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(200,169,110,0.3)",borderRadius:7,padding:"4px 8px",color:"#C8A96E",fontFamily:"Georgia,serif",fontSize:14,cursor:"pointer",outline:"none"}}>{MONTHS.map((m,i)=><option key={i} value={i} style={{background:"#1a0533"}}>{m}</option>)}</select>
+                  <select value={calYear2} onChange={e=>setCalDate(new Date(+e.target.value,calMonth,1))} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(200,169,110,0.3)",borderRadius:7,padding:"4px 8px",color:"#C8A96E",fontFamily:"Georgia,serif",fontSize:14,cursor:"pointer",outline:"none"}}>{Array.from({length:6},(_,i)=>new Date().getFullYear()-1+i).map(y=><option key={y} value={y} style={{background:"#1a0533"}}>{y}</option>)}</select>
+                </div>
+                :<div style={{fontSize:15,color:"#C8A96E"}}>{fmtDate(weekStart)} – {fmtDate(addDays(weekStart,6))}</div>
               }
               <button onClick={()=>navCal(1)} style={S.navBtn}>›</button>
             </div>
@@ -429,20 +481,19 @@ export default function App() {
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
                   {Array.from({length:firstDay}).map((_,i)=><div key={i}/>)}
                   {Array.from({length:dIM},(_,i)=>i+1).map(day=>{
-                    const now=new Date(); const isT=day===now.getDate()&&calMonth===now.getMonth()&&calYear2===now.getFullYear();
+                    const now=new Date();const isT=day===now.getDate()&&calMonth===now.getMonth()&&calYear2===now.getFullYear();
                     const iso=toISO(new Date(calYear2,calMonth,day));
-                    const {bks,mts}=itemsForDay(iso);
+                    const{bks,mts}=itemsForDay(iso);
                     const all=[...bks.map(b=>({...b,_k:"b"})),...mts.map(m=>({...m,_k:"m"}))];
                     const hasOut=bookings.some(b=>(isAllSel()||selApt.includes(b.apt))&&b.checkout===iso);
-                    const hasIn =bookings.some(b=>(isAllSel()||selApt.includes(b.apt))&&b.checkin===iso);
-                    return <div key={day} style={{minHeight:72,borderRadius:4,background:isT?"rgba(200,169,110,0.15)":"rgba(255,255,255,0.04)",border:isT?"1px solid #C8A96E":"1px solid rgba(255,255,255,0.06)",padding:"2px",overflow:"hidden",position:"relative"}}>
+                    const hasIn=bookings.some(b=>(isAllSel()||selApt.includes(b.apt))&&b.checkin===iso);
+                    return<div key={day} style={{minHeight:72,borderRadius:4,background:isT?"rgba(200,169,110,0.15)":"rgba(255,255,255,0.04)",border:isT?"1px solid #C8A96E":"1px solid rgba(255,255,255,0.06)",padding:"2px",overflow:"hidden",position:"relative"}}>
                       {hasOut&&<div style={{position:"absolute",top:1,left:1,width:5,height:5,borderRadius:"50%",background:"#FF6B6B"}}/>}
-                      {hasIn &&<div style={{position:"absolute",top:1,left:hasOut?8:1,width:5,height:5,borderRadius:"50%",background:"#4CAF8A"}}/>}
+                      {hasIn&&<div style={{position:"absolute",top:1,left:hasOut?8:1,width:5,height:5,borderRadius:"50%",background:"#4CAF8A"}}/>}
                       <div style={{fontSize:9,color:isT?"#C8A96E":"#aaa",textAlign:"right"}}>{day}</div>
-                      {all.slice(0,4).map((x,i)=>
-                        x._k==="b"
-                          ?<div key={i} onClick={()=>setViewBooking(x)} style={{fontSize:8,background:aptColor(x.apt)+"cc",borderRadius:2,padding:"1px 2px",marginBottom:1,color:"#1a0533",fontWeight:"bold",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer"}}>{x.guest.split(" ")[0]}</div>
-                          :<div key={i} style={{fontSize:8,background:"rgba(255,200,100,0.25)",borderRadius:2,padding:"1px 2px",marginBottom:1,color:"#ffd580",whiteSpace:"nowrap"}}>{mtEmoji(x.type)}</div>
+                      {all.slice(0,4).map((x,i)=>x._k==="b"
+                        ?<div key={i} onClick={()=>setViewBooking(x)} style={{fontSize:8,background:aptColor(x.apt)+"cc",borderRadius:2,padding:"1px 2px",marginBottom:1,color:"#1a0533",fontWeight:"bold",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer"}}>{x.guest.split(" ")[0]}</div>
+                        :<div key={i} style={{fontSize:8,background:"rgba(255,200,100,0.25)",borderRadius:2,padding:"1px 2px",marginBottom:1,color:"#ffd580",whiteSpace:"nowrap"}}>{mtEmoji(x.type)}</div>
                       )}
                       {all.length>4&&<div style={{fontSize:7,color:"#C8A96E"}}>+{all.length-4}</div>}
                     </div>;
@@ -453,7 +504,7 @@ export default function App() {
               <div>
                 <div style={{display:"grid",gridTemplateColumns:"38px repeat(7,1fr)",gap:2,marginBottom:3}}>
                   <div/>
-                  {weekDays.map((d,i)=>{const isT=toISO(d)===toISO(new Date()); return <div key={i} style={{textAlign:"center",fontSize:9,color:isT?"#C8A96E":"#aaa",borderBottom:isT?"2px solid #C8A96E":"none",paddingBottom:2}}><div>{DAYS_SHORT[d.getDay()]}</div><div style={{fontSize:12,fontWeight:isT?"bold":"normal"}}>{d.getDate()}</div></div>;})}
+                  {weekDays.map((d,i)=>{const isT=toISO(d)===toISO(new Date());return<div key={i} style={{textAlign:"center",fontSize:9,color:isT?"#C8A96E":"#aaa",borderBottom:isT?"2px solid #C8A96E":"none",paddingBottom:2}}><div>{DAYS_SHORT[d.getDay()]}</div><div style={{fontSize:12,fontWeight:isT?"bold":"normal"}}>{d.getDate()}</div></div>;})}
                 </div>
                 {(isAllSel()?apts:apts.filter(a=>Array.isArray(selApt)&&selApt.includes(a.id))).map(apt=>(
                   <div key={apt.id} style={{display:"grid",gridTemplateColumns:"38px repeat(7,1fr)",gap:2,marginBottom:2}}>
@@ -464,7 +515,7 @@ export default function App() {
                       const mt=maints.filter(m=>(m.apt==="all"||m.apt===apt.id)&&m.date===iso);
                       const isT=iso===toISO(new Date());
                       const hasOut=bookings.some(b=>b.apt===apt.id&&b.checkout===iso);
-                      return <div key={i} style={{minHeight:36,borderRadius:3,background:isT?"rgba(200,169,110,0.1)":"rgba(255,255,255,0.04)",border:isT?"1px solid #C8A96E44":"1px solid rgba(255,255,255,0.05)",padding:1,overflow:"hidden",position:"relative"}}>
+                      return<div key={i} style={{minHeight:36,borderRadius:3,background:isT?"rgba(200,169,110,0.1)":"rgba(255,255,255,0.04)",border:isT?"1px solid #C8A96E44":"1px solid rgba(255,255,255,0.05)",padding:1,overflow:"hidden",position:"relative"}}>
                         {hasOut&&<div style={{position:"absolute",top:1,right:1,width:4,height:4,borderRadius:"50%",background:"#FF6B6B"}}/>}
                         {bk&&<div onClick={()=>setViewBooking(bk)} style={{fontSize:7,background:apt.color+"dd",color:"#1a0533",borderRadius:2,padding:"1px 2px",fontWeight:"bold",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"pointer"}}>{bk.guest.split(" ")[0]}</div>}
                         {mt.map((m,j)=><div key={j} style={{fontSize:9,textAlign:"center"}}>{mtEmoji(m.type)}</div>)}
@@ -482,6 +533,7 @@ export default function App() {
           </div>
         )}
 
+        {/* ══ LIST ══ */}
         {view==="list"&&(
           <div style={{padding:"0 12px"}}>
             <div style={{display:"flex",gap:6,marginBottom:14}}>
@@ -502,7 +554,7 @@ export default function App() {
                 const prc=parseFloat(b.price)||0;
                 const dl=Math.round((parseDate(b.checkout)-new Date())/86400000);
                 const soon=dl>=0&&dl<=7;
-                return <div key={b.id} style={{background:"rgba(255,255,255,0.05)",borderRadius:11,padding:13,marginBottom:9,borderLeft:`4px solid ${a?a.color:"#888"}`,outline:soon?"1px solid rgba(255,107,107,0.3)":"none"}}>
+                return<div key={b.id} style={{background:"rgba(255,255,255,0.05)",borderRadius:11,padding:13,marginBottom:9,borderLeft:`4px solid ${a?a.color:"#888"}`,outline:soon?"1px solid rgba(255,107,107,0.3)":"none"}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
                     <div>
                       <div style={{fontSize:15,fontWeight:"bold"}}>{b.guest}{soon&&<span style={{marginLeft:6,fontSize:10,color:"#FF6B6B",background:"rgba(255,107,107,0.15)",padding:"1px 6px",borderRadius:8}}>⏰ {dl===0?"oggi":dl===1?"domani":`tra ${dl}gg`}</span>}</div>
@@ -515,7 +567,6 @@ export default function App() {
                       <div style={{fontSize:10,marginTop:3,padding:"2px 6px",borderRadius:8,display:"inline-block",background:b.status==="tentative"?"rgba(200,169,110,0.2)":"rgba(76,175,138,0.2)",color:b.status==="tentative"?"#C8A96E":"#4CAF8A"}}>{b.status==="tentative"?"Provvisoria":"Confermata"}</div>
                     </div>
                   </div>
-                  {/* ── RIGA €/NOTTE VISIBILE SEMPRE ── */}
                   {prc>0&&n>0&&<div style={{background:"rgba(255,179,71,0.1)",border:"1px solid rgba(255,179,71,0.25)",borderRadius:8,padding:"6px 10px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span style={{fontSize:11,color:"#FFB347"}}>Media per notte</span>
                     <span style={{fontSize:13,fontWeight:"bold",color:"#FFB347"}}>€{fmtEur(prc/n)} <span style={{fontSize:10,color:"#7EC8E3",fontWeight:"normal"}}>· €{fmtEur(prc*taxMult/n)} netto</span></span>
@@ -537,12 +588,10 @@ export default function App() {
               })}
             </>}
             {listFilter!=="bookings"&&<>
-              {listFilter==="maint"&&(
-                <div style={{display:"flex",gap:8,marginBottom:14}}>
-                  <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#ffd580"}}>{filteredMaints.length}</div><div style={{fontSize:9,color:"#999"}}>MANUT.</div></div>
-                  <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#D94F5C"}}>€{fmtEur(filteredMaints.reduce((s,m)=>s+(parseFloat(m.cost)||0),0))}</div><div style={{fontSize:9,color:"#999"}}>COSTO TOT.</div></div>
-                </div>
-              )}
+              {listFilter==="maint"&&<div style={{display:"flex",gap:8,marginBottom:14}}>
+                <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#ffd580"}}>{filteredMaints.length}</div><div style={{fontSize:9,color:"#999"}}>MANUT.</div></div>
+                <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#D94F5C"}}>€{fmtEur(filteredMaints.reduce((s,m)=>s+(parseFloat(m.cost)||0),0))}</div><div style={{fontSize:9,color:"#999"}}>COSTO TOT.</div></div>
+              </div>}
               {listFilter==="all"&&filteredMaints.length>0&&<div style={{fontSize:10,color:"#ffd580",letterSpacing:3,textTransform:"uppercase",margin:"16px 0 8px",borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:14}}>Manutenzioni</div>}
               {filteredMaints.length===0&&<div style={{textAlign:"center",padding:"28px 0",color:"#666"}}>Nessuna manutenzione</div>}
               {filteredMaints.map(m=>(
@@ -562,6 +611,153 @@ export default function App() {
           </div>
         )}
 
+        {/* ══ COSTS ══ */}
+        {view==="costs"&&(()=>{
+          const totCostMonth=costsForMonth(costsYear,costsMonth);
+          const totCostYear=costsForYear(costsYear);
+          const filteredCosts=costs.filter(c=>{
+            const isAnnual=COST_TYPES_ANNUAL.some(t=>t.id===c.type);
+            return isAnnual?c.year===costsYear:(c.year===costsYear&&c.month===costsMonth);
+          }).sort((a,b)=>a.type.localeCompare(b.type));
+
+          return<div style={{padding:"0 12px"}}>
+            <div style={{textAlign:"center",fontSize:10,color:"#FF6B6B",letterSpacing:3,textTransform:"uppercase",marginBottom:12}}>💸 Costi</div>
+
+            {/* Navigazione mese/anno */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,background:"rgba(255,255,255,0.04)",borderRadius:11,padding:"10px 14px",border:"1px solid rgba(255,100,100,0.15)"}}>
+              <button onClick={()=>{let m=costsMonth-1,y=costsYear;if(m<0){m=11;y--;}setCostsMonth(m);setCostsYear(y);}} style={S.navBtn}>‹</button>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:14,color:"#f0e6d3",fontWeight:"bold"}}>{MONTHS[costsMonth]} {costsYear}</div>
+                <div style={{fontSize:10,color:"#999",marginTop:2}}>Costi del mese: <span style={{color:"#FF6B6B",fontWeight:"bold"}}>€{fmtEur(totCostMonth)}</span></div>
+              </div>
+              <button onClick={()=>{let m=costsMonth+1,y=costsYear;if(m>11){m=0;y++;}setCostsMonth(m);setCostsYear(y);}} style={S.navBtn}>›</button>
+            </div>
+
+            {/* Totale anno */}
+            <div style={{display:"flex",gap:8,marginBottom:14}}>
+              <div style={S.card}><div style={{fontSize:16,fontWeight:"bold",color:"#FF6B6B"}}>€{fmtEur(totCostYear)}</div><div style={{fontSize:9,color:"#999"}}>COSTI ANNO {costsYear}</div></div>
+              <div style={S.card}><div style={{fontSize:16,fontWeight:"bold",color:"#ffd580"}}>€{fmtEur(totCostMonth)}</div><div style={{fontSize:9,color:"#999"}}>COSTI {MONTHS_SHORT[costsMonth]}</div></div>
+            </div>
+
+            {/* Grafico mensile costi vs ricavi */}
+            {(()=>{
+              const monthly=Array.from({length:12},(_,mi)=>{
+                const rev=filterBks({year:costsYear,month:mi,aptIds:["all"]}).reduce((s,b)=>s+(parseFloat(b.price)||0),0)*taxMult;
+                const cst=costsForMonth(costsYear,mi)+maints.filter(m=>{ const d=parseDate(m.date); return d&&d.getFullYear()===costsYear&&d.getMonth()===mi; }).reduce((s,m)=>s+(parseFloat(m.cost)||0),0);
+                return{rev,cst,margin:rev-cst};
+              });
+              const maxVal=Math.max(...monthly.map(m=>Math.max(m.rev,m.cst)),1);
+              return<div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(255,100,100,0.12)"}}>
+                <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Ricavi netti vs Costi {costsYear}</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(12,1fr)",gap:3,alignItems:"flex-end",height:100,marginBottom:4}}>
+                  {monthly.map((m,i)=>{
+                    const rPct=(m.rev/maxVal)*90;const cPct=(m.cst/maxVal)*90;const isSel=i===costsMonth;
+                    return<div key={i} onClick={()=>setCostsMonth(i)} style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%",cursor:"pointer",gap:1}}>
+                      <div style={{width:"45%",background:"#4CAF8A"+(isSel?"":"99"),borderRadius:"2px 2px 0 0",height:Math.max(rPct,2)+"%",outline:isSel?"1px solid #4CAF8A":"none"}}/>
+                      <div style={{width:"45%",background:"#FF6B6B"+(isSel?"":"99"),borderRadius:"2px 2px 0 0",height:Math.max(cPct,2)+"%",outline:isSel?"1px solid #FF6B6B":"none"}}/>
+                    </div>;
+                  })}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(12,1fr)",gap:3,marginBottom:8}}>
+                  {MONTHS_SHORT.map((m,i)=><div key={i} onClick={()=>setCostsMonth(i)} style={{textAlign:"center",fontSize:7,color:i===costsMonth?"#C8A96E":"#666",cursor:"pointer",fontWeight:i===costsMonth?"bold":"normal"}}>{m}</div>)}
+                </div>
+                <div style={{display:"flex",gap:12,fontSize:10}}>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:2,background:"#4CAF8A"}}/><span style={{color:"#4CAF8A"}}>Ricavi netti</span></div>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:2,background:"#FF6B6B"}}/><span style={{color:"#FF6B6B"}}>Costi totali</span></div>
+                </div>
+                {/* Tabella mensile */}
+                <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:12,marginTop:10}}>
+                  {monthly.map((d,i)=><div key={i} onClick={()=>setCostsMonth(i)} style={{display:"grid",gridTemplateColumns:"40px 1fr 1fr 1fr",gap:4,padding:"5px 2px",borderRadius:6,cursor:"pointer",background:i===costsMonth?"rgba(200,169,110,0.1)":"transparent",marginBottom:1}}>
+                    <div style={{fontSize:11,color:"#aaa"}}>{MONTHS_SHORT[i]}</div>
+                    <div style={{fontSize:11,color:d.rev>0?"#4CAF8A":"#444",textAlign:"right"}}>€{fmtEur(d.rev)}</div>
+                    <div style={{fontSize:11,color:d.cst>0?"#FF6B6B":"#444",textAlign:"right"}}>-€{fmtEur(d.cst)}</div>
+                    <div style={{fontSize:11,color:d.margin>=0?"#7EC8E3":"#D94F5C",textAlign:"right",fontWeight:"bold"}}>{d.margin>=0?"+":""} €{fmtEur(d.margin)}</div>
+                  </div>)}
+                  <div style={{display:"grid",gridTemplateColumns:"40px 1fr 1fr 1fr",gap:4,padding:"6px 2px",borderTop:"1px solid rgba(200,169,110,0.3)",marginTop:4}}>
+                    <div style={{fontSize:10,color:"#C8A96E",fontWeight:"bold"}}>TOT.</div>
+                    <div style={{fontSize:11,color:"#4CAF8A",textAlign:"right",fontWeight:"bold"}}>€{fmtEur(monthly.reduce((s,m)=>s+m.rev,0))}</div>
+                    <div style={{fontSize:11,color:"#FF6B6B",textAlign:"right",fontWeight:"bold"}}>-€{fmtEur(monthly.reduce((s,m)=>s+m.cst,0))}</div>
+                    <div style={{fontSize:11,color:"#7EC8E3",textAlign:"right",fontWeight:"bold"}}>€{fmtEur(monthly.reduce((s,m)=>s+m.margin,0))}</div>
+                  </div>
+                </div>
+              </div>;
+            })()}
+
+            {/* Lista costi del mese */}
+            <div style={{fontSize:10,color:"#FF6B6B",letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>Voci di costo — {MONTHS[costsMonth]} {costsYear}</div>
+            {filteredCosts.length===0&&<div style={{textAlign:"center",padding:"20px 0",color:"#666"}}>Nessun costo inserito</div>}
+            {filteredCosts.map(c=>{
+              const ct=ctInfo(c.type);const isAnnual=COST_TYPES_ANNUAL.some(t=>t.id===c.type);
+              return<div key={c.id} style={{background:"rgba(255,100,100,0.05)",borderRadius:10,padding:12,marginBottom:8,borderLeft:`4px solid ${ct.color}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:14}}>{ct.emoji} {ct.label}</div>
+                    <div style={{fontSize:11,color:"#aaa"}}>{c.apt==="all"?"Tutta la villa":aptEmoji(c.apt)+" "+aptLabel(c.apt)}</div>
+                    {isAnnual&&<div style={{fontSize:10,color:"#FFB347",marginTop:2}}>Annuale · €{fmtEur(c.amount/12)}/mese</div>}
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:16,fontWeight:"bold",color:"#FF6B6B"}}>€{fmtEur(c.amount)}</div>
+                    {isAnnual&&<div style={{fontSize:10,color:"#666"}}>totale anno</div>}
+                  </div>
+                </div>
+                {c.notes&&<div style={{fontSize:11,color:"#aaa",fontStyle:"italic",marginTop:7}}>{c.notes}</div>}
+                {canEdit&&<div style={{display:"flex",gap:7,marginTop:9}}>
+                  <button onClick={()=>handleCEdit(c)} style={{...S.btn("#2a1a1a","#FF6B6B"),flex:1,fontSize:12,padding:"7px 0"}}>Modifica</button>
+                  <button onClick={()=>setDelCId(c.id)} style={{...S.btn("#3a1a1a","#D94F5C"),flex:1,fontSize:12,padding:"7px 0"}}>Elimina</button>
+                </div>}
+              </div>;
+            })}
+          </div>;
+        })()}
+
+        {/* ══ ADD COST ══ */}
+        {view==="addCost"&&(()=>{
+          const isAnnual=COST_TYPES_ANNUAL.some(t=>t.id===cForm.type);
+          return<div style={{padding:"0 14px"}}>
+            <div style={{fontSize:15,color:"#FF6B6B",marginBottom:14,textAlign:"center",letterSpacing:1}}>{editCId!==null?"Modifica":"Nuovo"} Costo</div>
+            <div style={{fontSize:10,color:"#FF6B6B",letterSpacing:2,textTransform:"uppercase",marginBottom:7}}>Categoria</div>
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:10,color:"#aaa",marginBottom:6}}>Mensili</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+                {COST_TYPES_MONTHLY.map(t=><button key={t.id} onClick={()=>setCForm(f=>({...f,type:t.id,isAnnual:false}))} style={{padding:"8px 14px",borderRadius:20,border:cForm.type===t.id?"none":`1px solid ${t.color}55`,background:cForm.type===t.id?t.color:"rgba(255,255,255,0.06)",color:cForm.type===t.id?"#1a0533":"#f0e6d3",cursor:"pointer",fontSize:13,fontFamily:"Georgia,serif"}}>{t.emoji} {t.label}</button>)}
+              </div>
+              <div style={{fontSize:10,color:"#aaa",marginBottom:6}}>Annuali</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {COST_TYPES_ANNUAL.map(t=><button key={t.id} onClick={()=>setCForm(f=>({...f,type:t.id,isAnnual:true}))} style={{padding:"8px 14px",borderRadius:20,border:cForm.type===t.id?"none":`1px solid ${t.color}55`,background:cForm.type===t.id?t.color:"rgba(255,255,255,0.06)",color:cForm.type===t.id?"#1a0533":"#f0e6d3",cursor:"pointer",fontSize:13,fontFamily:"Georgia,serif"}}>{t.emoji} {t.label}</button>)}
+              </div>
+            </div>
+            <div style={{fontSize:10,color:"#FF6B6B",letterSpacing:2,textTransform:"uppercase",marginBottom:7}}>Riguarda</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
+              <Pill active={cForm.apt==="all"} color="#FF6B6B" onClick={()=>setCForm(f=>({...f,apt:"all"}))}>Tutta la villa</Pill>
+              {apts.map(a=><Pill key={a.id} active={cForm.apt===a.id} color={a.color} onClick={()=>setCForm(f=>({...f,apt:a.id}))}>{a.emoji} {a.name}</Pill>)}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:10,color:"#FF6B6B",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Anno</div>
+                <select value={cForm.year} onChange={e=>setCForm(f=>({...f,year:+e.target.value}))} style={{...S.input}}>
+                  {Array.from({length:5},(_,i)=>new Date().getFullYear()-1+i).map(y=><option key={y} value={y} style={{background:"#1a0533"}}>{y}</option>)}
+                </select>
+              </div>
+              {!isAnnual&&<div style={{flex:1}}>
+                <div style={{fontSize:10,color:"#FF6B6B",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Mese</div>
+                <select value={cForm.month} onChange={e=>setCForm(f=>({...f,month:+e.target.value}))} style={{...S.input}}>
+                  {MONTHS.map((m,i)=><option key={i} value={i} style={{background:"#1a0533"}}>{m}</option>)}
+                </select>
+              </div>}
+            </div>
+            {isAnnual&&<div style={{fontSize:11,color:"#FFB347",marginBottom:10,padding:"8px 12px",background:"rgba(255,179,71,0.08)",borderRadius:8}}>💡 Costo annuale: verrà diviso per 12 nei grafici mensili (€{cForm.amount?fmtEur(parseFloat(cForm.amount)/12):"0,00"}/mese)</div>}
+            <div style={{fontSize:10,color:"#FF6B6B",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:8}}>Importo (€)</div>
+            <input type="number" value={cForm.amount} onChange={e=>setCForm(f=>({...f,amount:e.target.value}))} placeholder="0" style={S.input}/>
+            <div style={{fontSize:10,color:"#FF6B6B",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:10}}>Note</div>
+            <textarea value={cForm.notes} onChange={e=>setCForm(f=>({...f,notes:e.target.value}))} placeholder="Note..." rows={3} style={{...S.input,resize:"vertical",marginBottom:16}}/>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{setEditCId(null);setCForm(emptyCForm());setView("costs");}} style={{...S.btn("#1a1a2e","#888"),flex:1,padding:"12px 0"}}>Annulla</button>
+              <button onClick={handleCSave} style={{...S.btn("#3a1a1a","#FF6B6B"),flex:2,padding:"12px 0",fontWeight:"bold"}}>{editCId!==null?"Aggiorna":"Salva"}</button>
+            </div>
+          </div>;
+        })()}
+
+        {/* ══ STATS ══ */}
         {view==="stats"&&(()=>{
           const isAll=statsApts.includes("all");
           const bksYear=filterBks({year:statsYear,aptIds:statsApts});
@@ -569,7 +765,7 @@ export default function App() {
           const totRev=bksFilt.reduce((s,b)=>s+(parseFloat(b.price)||0),0);
           const totNts=bksFilt.reduce((s,b)=>s+nights(parseDate(b.checkin),parseDate(b.checkout)),0);
           const avgNts=bksFilt.length>0?totNts/bksFilt.length:0;
-          const monthly=Array(12).fill(0); bksYear.forEach(b=>{monthly[bkMonth(b)]+=parseFloat(b.price)||0;});
+          const monthly=Array(12).fill(0);bksYear.forEach(b=>{monthly[bkMonth(b)]+=parseFloat(b.price)||0;});
           const totYear=monthly.reduce((s,v)=>s+v,0);
           const totYearAll=filterBks({year:statsYear,aptIds:["all"]}).reduce((s,b)=>s+(parseFloat(b.price)||0),0);
           const maxVal=Math.max(...monthly,1);
@@ -577,8 +773,15 @@ export default function App() {
           const aptsShow=isAll?apts:apts.filter(a=>statsApts.includes(a.id));
           const periodLabel=statsMonth!==null?`${MONTHS[statsMonth]} ${statsYear}`:`Anno ${statsYear}`;
           const ATTIVITA_START="2026-05-15";
+          const totCostsPeriod=statsMonth!==null?costsForMonth(statsYear,statsMonth):costsForYear(statsYear);
+          const totMaintCostPeriod=(statsMonth!==null
+            ?maints.filter(m=>{const d=parseDate(m.date);return d&&d.getFullYear()===statsYear&&d.getMonth()===statsMonth;})
+            :maints.filter(m=>{const d=parseDate(m.date);return d&&d.getFullYear()===statsYear;})
+          ).reduce((s,m)=>s+(parseFloat(m.cost)||0),0);
+          const totAllCosts=totCostsPeriod+totMaintCostPeriod;
+          const nettoReale=(totRev*taxMult)-totAllCosts;
 
-          return <div style={{padding:"0 12px"}}>
+          return<div style={{padding:"0 12px"}}>
             <div style={{textAlign:"center",fontSize:10,color:"#C8A96E",letterSpacing:3,textTransform:"uppercase",marginBottom:10}}>Statistiche</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
               <Pill active={statsApts.includes("all")} color="#C8A96E" onClick={()=>toggleStatsApt("all")}>Tutti</Pill>
@@ -598,19 +801,33 @@ export default function App() {
                 <div style={S.card}><div style={{fontSize:17,fontWeight:"bold",color:"#7EC8E3"}}>€{fmtEur(totRev*taxMult)}</div><div style={{fontSize:9,color:"#999"}}>NETTO</div></div>
                 <div style={S.card}><div style={{fontSize:17,fontWeight:"bold",color:"#aaa"}}>{bksFilt.length}</div><div style={{fontSize:9,color:"#999"}}>PRENOT.</div></div>
               </div>
-              <div style={{display:"flex",gap:8}}>
+              <div style={{display:"flex",gap:8,marginBottom:8}}>
                 <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#aaa"}}>{totNts}</div><div style={{fontSize:9,color:"#999"}}>NOTTI TOT.</div></div>
                 <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#FFB347"}}>{bksFilt.length>0?avgNts.toFixed(1):"—"}</div><div style={{fontSize:9,color:"#999"}}>Ø NOTTI/PREN.</div></div>
               </div>
+              {/* Netto reale dopo costi */}
+              <div style={{background:"rgba(255,100,100,0.08)",border:"1px solid rgba(255,100,100,0.25)",borderRadius:10,padding:12,marginTop:4}}>
+                <div style={{fontSize:10,color:"#FF6B6B",letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>💸 Dopo costi e spese</div>
+                <div style={{display:"flex",gap:8,marginBottom:6}}>
+                  <div style={S.card}><div style={{fontSize:14,fontWeight:"bold",color:"#FF6B6B"}}>-€{fmtEur(totCostsPeriod)}</div><div style={{fontSize:9,color:"#999"}}>UTENZE</div></div>
+                  <div style={S.card}><div style={{fontSize:14,fontWeight:"bold",color:"#ffd580"}}>-€{fmtEur(totMaintCostPeriod)}</div><div style={{fontSize:9,color:"#999"}}>MANUT.</div></div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:"rgba(0,0,0,0.2)",borderRadius:8}}>
+                  <span style={{fontSize:12,color:"#aaa"}}>Margine reale</span>
+                  <span style={{fontSize:20,fontWeight:"bold",color:nettoReale>=0?"#4CAF8A":"#D94F5C"}}>{nettoReale>=0?"+":""} €{fmtEur(nettoReale)}</span>
+                </div>
+              </div>
             </div>
+
+            {/* Storico */}
             {(()=>{
               const allBks=(isAll?bookings:bookings.filter(b=>statsApts.includes(b.apt))).filter(b=>b.checkin>=ATTIVITA_START);
               const allRev=allBks.reduce((s,b)=>s+(parseFloat(b.price)||0),0);
               const allNts=allBks.reduce((s,b)=>s+nights(parseDate(b.checkin),parseDate(b.checkout)),0);
               const days=Math.floor((new Date()-parseDate(ATTIVITA_START))/86400000);
-              return <div style={{background:"rgba(200,169,110,0.07)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.35)"}}>
+              return<div style={{background:"rgba(200,169,110,0.07)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.35)"}}>
                 <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>📊 Totale storico</div>
-                <div style={{fontSize:15,color:"#C8A96E",fontWeight:"bold",marginBottom:14}}>Dal 15 maggio 2026 · <span style={{fontSize:22,color:"#fff"}}>{days}</span> giorni di attività</div>
+                <div style={{fontSize:15,color:"#C8A96E",fontWeight:"bold",marginBottom:14}}>Dal 15 maggio 2026 · <span style={{fontSize:22,color:"#fff"}}>{days}</span> giorni</div>
                 <div style={{display:"flex",gap:8,marginBottom:8}}>
                   <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#4CAF8A"}}>€{fmtEur(allRev)}</div><div style={{fontSize:9,color:"#999"}}>LORDO TOTALE</div></div>
                   <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#7EC8E3"}}>€{fmtEur(allRev*taxMult)}</div><div style={{fontSize:9,color:"#999"}}>NETTO TOTALE</div></div>
@@ -621,12 +838,14 @@ export default function App() {
                 </div>
               </div>;
             })()}
+
+            {/* Grafico mensile */}
             <div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.12)"}}>
               <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Ricavi mensili {statsYear}</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(12,1fr)",gap:3,alignItems:"flex-end",height:110,marginBottom:4}}>
                 {monthly.map((val,i)=>{
-                  const pct=totYear>0?Math.round(val/totYear*100):0; const sel=statsMonth===i;
-                  return <div key={i} onClick={()=>setStatsMonth(statsMonth===i?null:i)} style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%",cursor:"pointer"}}>
+                  const pct=totYear>0?Math.round(val/totYear*100):0;const sel=statsMonth===i;
+                  return<div key={i} onClick={()=>setStatsMonth(statsMonth===i?null:i)} style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%",cursor:"pointer"}}>
                     {val>0&&<div style={{fontSize:7,color:sel?"#fff":barColor,marginBottom:2,textAlign:"center",lineHeight:1,fontWeight:sel?"bold":"normal"}}>{pct}%</div>}
                     <div style={{width:"100%",background:val>0?(sel?"#fff":barColor+"cc"):"rgba(255,255,255,0.07)",borderRadius:"3px 3px 0 0",height:Math.max((val/maxVal)*80,val>0?8:3)+"%",outline:sel?"2px solid #fff":"none"}}/>
                   </div>;
@@ -640,10 +859,10 @@ export default function App() {
                   const bk=filterBks({year:statsYear,month:mi,aptIds:statsApts});
                   const r=bk.reduce((s,b)=>s+(parseFloat(b.price)||0),0);
                   const n=bk.reduce((s,b)=>s+nights(parseDate(b.checkin),parseDate(b.checkout)),0);
-                  return {bks:bk.length,rev:r,nts:n,avg:bk.length>0?n/bk.length:0};
+                  return{bks:bk.length,rev:r,nts:n,avg:bk.length>0?n/bk.length:0};
                 });
-                const tot={bks:0,rev:0,nts:0}; rows.forEach(r=>{tot.bks+=r.bks;tot.rev+=r.rev;tot.nts+=r.nts;});
-                return <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:12}}>
+                const tot={bks:0,rev:0,nts:0};rows.forEach(r=>{tot.bks+=r.bks;tot.rev+=r.rev;tot.nts+=r.nts;});
+                return<div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:12}}>
                   {rows.map((d,i)=><div key={i} onClick={()=>setStatsMonth(i)} style={{display:"grid",gridTemplateColumns:"52px 1fr 36px 40px 52px",gap:4,padding:"5px 2px",borderRadius:6,cursor:"pointer",background:statsMonth===i?"rgba(200,169,110,0.1)":"transparent",marginBottom:1}}>
                     <div style={{fontSize:11,color:"#aaa"}}>{MONTHS_SHORT[i]}</div>
                     <div style={{fontSize:11,color:d.rev>0?"#4CAF8A":"#444",textAlign:"right"}}>€{fmtEur(d.rev)}</div>
@@ -663,12 +882,12 @@ export default function App() {
               {statsMonth!==null&&(()=>{
                 const bkM=filterBks({year:statsYear,month:statsMonth,aptIds:statsApts});
                 const rM=bkM.reduce((s,b)=>s+(parseFloat(b.price)||0),0);
-                return <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:12}}>
+                return<div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:12}}>
                   <div style={{display:"flex",gap:8,marginBottom:10}}>
                     <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:barColor}}>€{fmtEur(rM)}</div><div style={{fontSize:9,color:"#999"}}>LORDO {MONTHS_SHORT[statsMonth]}</div></div>
                     <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#7EC8E3"}}>€{fmtEur(rM*taxMult)}</div><div style={{fontSize:9,color:"#999"}}>NETTO</div></div>
                   </div>
-                  {bkM.map(b=>{const a=apts.find(x=>x.id===b.apt); const n=nights(parseDate(b.checkin),parseDate(b.checkout)); return <div key={b.id} style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"9px 11px",marginBottom:7,borderLeft:`3px solid ${a?a.color:"#888"}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  {bkM.map(b=>{const a=apts.find(x=>x.id===b.apt);const n=nights(parseDate(b.checkin),parseDate(b.checkout));return<div key={b.id} style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"9px 11px",marginBottom:7,borderLeft:`3px solid ${a?a.color:"#888"}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div><div style={{fontSize:13,fontWeight:"bold"}}>{b.guest}</div><div style={{fontSize:10,color:a?a.color:"#888"}}>{a?.emoji} {a?.name}</div><div style={{fontSize:10,color:"#888"}}>{fmtDate(parseDate(b.checkin))} → {fmtDate(parseDate(b.checkout))} · {n} notti</div></div>
                     <div style={{textAlign:"right"}}><div style={{fontSize:14,fontWeight:"bold",color:"#4CAF8A"}}>€{fmtEur(parseFloat(b.price)||0)}</div>{b.platform&&<div style={{fontSize:9,color:platColor(b.platform)}}>{platEmoji(b.platform)} {platLabel(b.platform)}</div>}</div>
                   </div>;})}
@@ -676,12 +895,14 @@ export default function App() {
                 </div>;
               })()}
             </div>
+
+            {/* Media notte */}
             {(()=>{
-              const ntsEff=bksFilt.reduce((s,b)=>{const n=nights(parseDate(b.checkin),parseDate(b.checkout)); return s+(b.apt==="villacaterina"?n*4:n);},0);
+              const ntsEff=bksFilt.reduce((s,b)=>{const n=nights(parseDate(b.checkin),parseDate(b.checkout));return s+(b.apt==="villacaterina"?n*4:n);},0);
               const avgNight=ntsEff>0?totRev/ntsEff:0;
-              return <div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.12)"}}>
+              return<div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.12)"}}>
                 <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>💰 Ricavo medio per notte — {periodLabel}</div>
-                <div style={{fontSize:11,color:"#999",marginBottom:10}}>(Villa Caterina conteggiata x4 appartamenti)</div>
+                <div style={{fontSize:11,color:"#999",marginBottom:10}}>(Villa Caterina x4 appartamenti)</div>
                 <div style={{display:"flex",gap:8}}>
                   <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#FFB347"}}>€{fmtEur(avgNight)}</div><div style={{fontSize:9,color:"#999"}}>MEDIA/NOTTE LORDO</div></div>
                   <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#7EC8E3"}}>€{fmtEur(avgNight*taxMult)}</div><div style={{fontSize:9,color:"#999"}}>MEDIA/NOTTE NETTO</div></div>
@@ -689,11 +910,13 @@ export default function App() {
                 </div>
               </div>;
             })()}
+
+            {/* Piattaforme */}
             {(()=>{
-              const byP={}; PLATFORMS.forEach(p=>{byP[p.id]={count:0,revenue:0};}); bksFilt.forEach(b=>{const pid=b.platform||"altro"; if(!byP[pid])byP[pid]={count:0,revenue:0}; byP[pid].count++; byP[pid].revenue+=parseFloat(b.price)||0;});
-              return <div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.12)"}}>
+              const byP={};PLATFORMS.forEach(p=>{byP[p.id]={count:0,revenue:0};});bksFilt.forEach(b=>{const pid=b.platform||"altro";if(!byP[pid])byP[pid]={count:0,revenue:0};byP[pid].count++;byP[pid].revenue+=parseFloat(b.price)||0;});
+              return<div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.12)"}}>
                 <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>Piattaforme — {periodLabel}</div>
-                {PLATFORMS.map(p=>{ const d=byP[p.id]; const pct=bksFilt.length>0?(d.count/bksFilt.length*100):0; return <div key={p.id} style={{marginBottom:12}}>
+                {PLATFORMS.map(p=>{const d=byP[p.id];const pct=bksFilt.length>0?(d.count/bksFilt.length*100):0;return<div key={p.id} style={{marginBottom:12}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                     <div style={{fontSize:14,display:"flex",alignItems:"center",gap:6}}><span>{p.emoji}</span><span style={{color:p.color,fontWeight:"bold"}}>{p.label}</span></div>
                     <div style={{display:"flex",gap:10,alignItems:"center"}}><span style={{fontSize:13,fontWeight:"bold"}}>{d.count}</span>{d.revenue>0&&<span style={{fontSize:12,color:"#4CAF8A"}}>€{fmtEur(d.revenue)}</span>}<span style={{fontSize:11,color:"#666",minWidth:30,textAlign:"right"}}>{Math.round(pct)}%</span></div>
@@ -702,15 +925,17 @@ export default function App() {
                 </div>;})}
               </div>;
             })()}
+
+            {/* Classifica */}
             {(()=>{
               const medals=["🥇","🥈","🥉","4°","5°"];
               const rankY=apts.map(a=>({...a,rev:filterBks({year:statsYear,aptIds:[a.id]}).reduce((s,b)=>s+(parseFloat(b.price)||0),0)})).sort((a,b)=>b.rev-a.rev);
               const rankA=apts.map(a=>({...a,rev:bookings.filter(b=>b.apt===a.id&&b.checkin>=ATTIVITA_START).reduce((s,b)=>s+(parseFloat(b.price)||0),0)})).sort((a,b)=>b.rev-a.rev);
-              const mxY=Math.max(...rankY.map(a=>a.rev),1), mxA=Math.max(...rankA.map(a=>a.rev),1);
-              return <div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.12)"}}>
+              const mxY=Math.max(...rankY.map(a=>a.rev),1),mxA=Math.max(...rankA.map(a=>a.rev),1);
+              return<div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(200,169,110,0.12)"}}>
                 <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:14}}>🏆 Classifica fatturato</div>
                 <div style={{fontSize:11,color:"#aaa",marginBottom:8}}>ANNO {statsYear}</div>
-                {rankY.map((a,i)=>{ const pct=mxY>0?a.rev/mxY*100:0; return <div key={a.id} style={{marginBottom:9}}>
+                {rankY.map((a,i)=>{const pct=mxY>0?a.rev/mxY*100:0;return<div key={a.id} style={{marginBottom:9}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
                     <div style={{display:"flex",alignItems:"center",gap:6,fontSize:13}}><span style={{fontSize:14,minWidth:20}}>{medals[i]}</span><span style={{width:9,height:9,borderRadius:2,background:a.color,display:"inline-block"}}/><span style={{color:a.color,fontWeight:"bold"}}>{a.name}</span></div>
                     <span style={{fontSize:13,fontWeight:"bold",color:"#4CAF8A"}}>€{fmtEur(a.rev)}</span>
@@ -718,7 +943,7 @@ export default function App() {
                   <div style={{height:7,background:"rgba(255,255,255,0.06)",borderRadius:4,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",background:`linear-gradient(90deg,${a.color}88,${a.color})`,borderRadius:4}}/></div>
                 </div>;})}
                 <div style={{fontSize:11,color:"#aaa",margin:"14px 0 8px",paddingTop:12,borderTop:"1px solid rgba(255,255,255,0.07)"}}>DAL 15 MAGGIO 2026 — STORICO</div>
-                {rankA.map((a,i)=>{ const pct=mxA>0?a.rev/mxA*100:0; return <div key={a.id} style={{marginBottom:9}}>
+                {rankA.map((a,i)=>{const pct=mxA>0?a.rev/mxA*100:0;return<div key={a.id} style={{marginBottom:9}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
                     <div style={{display:"flex",alignItems:"center",gap:6,fontSize:13}}><span style={{fontSize:14,minWidth:20}}>{medals[i]}</span><span style={{width:9,height:9,borderRadius:2,background:a.color,display:"inline-block"}}/><span style={{color:a.color,fontWeight:"bold"}}>{a.name}</span></div>
                     <span style={{fontSize:13,fontWeight:"bold",color:"#C8A96E"}}>€{fmtEur(a.rev)}</span>
@@ -727,14 +952,15 @@ export default function App() {
                 </div>;})}
               </div>;
             })()}
+
             {aptsShow.map(a=>{
               const bkA=filterBks({year:statsYear,month:statsMonth,aptIds:[a.id]});
               const rA=bkA.reduce((s,b)=>s+(parseFloat(b.price)||0),0);
               const nA=bkA.reduce((s,b)=>s+nights(parseDate(b.checkin),parseDate(b.checkout)),0);
               const pct=totYearAll>0?filterBks({year:statsYear,aptIds:[a.id]}).reduce((s,b)=>s+(parseFloat(b.price)||0),0)/totYearAll*100:0;
-              const occ=statsMonth!==null?occupancyPct(a.id,statsYear,statsMonth):(()=>{ const v=Array.from({length:12},(_,m)=>occupancyPct(a.id,statsYear,m)); return Math.round(v.reduce((s,x)=>s+x,0)/12); })();
+              const occ=statsMonth!==null?occupancyPct(a.id,statsYear,statsMonth):(()=>{const v=Array.from({length:12},(_,m)=>occupancyPct(a.id,statsYear,m));return Math.round(v.reduce((s,x)=>s+x,0)/12);})();
               const oc=occ>=80?"#4CAF8A":occ>=50?"#FFB347":"#D94F5C";
-              return <div key={a.id} style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:13,marginBottom:9,borderLeft:`4px solid ${a.color}`}}>
+              return<div key={a.id} style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:13,marginBottom:9,borderLeft:`4px solid ${a.color}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
                   <div style={{fontSize:14}}>{a.emoji} <span style={{color:a.color,fontWeight:"bold"}}>{a.name}</span></div>
                   <div style={{fontSize:10,color:"#999"}}>{pct.toFixed(0)}% del fatturato</div>
@@ -752,20 +978,19 @@ export default function App() {
           </div>;
         })()}
 
+        {/* ══ ADD BOOKING ══ */}
         {view==="add"&&(
           <div style={{padding:"0 14px"}}>
             <div style={{fontSize:15,color:"#C8A96E",marginBottom:14,textAlign:"center",letterSpacing:1}}>{editId!==null?"Modifica":"Nuova"} Prenotazione</div>
-            {editId===null&&(
-              <div style={{background:"rgba(126,200,227,0.07)",border:"1px solid rgba(126,200,227,0.3)",borderRadius:11,padding:14,marginBottom:16}}>
-                <div style={{fontSize:12,color:"#7EC8E3",fontWeight:"bold",marginBottom:4}}>📷 Compila dai dati della prenotazione</div>
-                <div style={{fontSize:11,color:"#999",marginBottom:10}}>Carica uno screenshot o PDF della conferma.</div>
-                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" onChange={handleFileUpload} disabled={aiLoading} style={{display:"none"}} id="fileUpload"/>
-                <label htmlFor="fileUpload" style={{display:"block",textAlign:"center",...S.btn("#1a2a3a","#7EC8E3"),padding:"12px 0",fontWeight:"bold",cursor:aiLoading?"not-allowed":"pointer",opacity:aiLoading?0.6:1}}>
-                  {aiLoading?"⏳ Analisi in corso...":"📎 Scegli foto o PDF"}
-                </label>
-                {aiError&&<div style={{marginTop:8,fontSize:11,color:"#D94F5C"}}>{aiError}</div>}
-              </div>
-            )}
+            {editId===null&&<div style={{background:"rgba(126,200,227,0.07)",border:"1px solid rgba(126,200,227,0.3)",borderRadius:11,padding:14,marginBottom:16}}>
+              <div style={{fontSize:12,color:"#7EC8E3",fontWeight:"bold",marginBottom:4}}>📷 Compila dai dati della prenotazione</div>
+              <div style={{fontSize:11,color:"#999",marginBottom:10}}>Carica uno screenshot o PDF della conferma.</div>
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" onChange={handleFileUpload} disabled={aiLoading} style={{display:"none"}} id="fileUpload"/>
+              <label htmlFor="fileUpload" style={{display:"block",textAlign:"center",...S.btn("#1a2a3a","#7EC8E3"),padding:"12px 0",fontWeight:"bold",cursor:aiLoading?"not-allowed":"pointer",opacity:aiLoading?0.6:1}}>
+                {aiLoading?"⏳ Analisi in corso...":"📎 Scegli foto o PDF"}
+              </label>
+              {aiError&&<div style={{marginTop:8,fontSize:11,color:"#D94F5C"}}>{aiError}</div>}
+            </div>}
             <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:7}}>Appartamento</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>{apts.map(a=><Pill key={a.id} active={form.apt===a.id} color={a.color} onClick={()=>setForm(f=>({...f,apt:a.id}))}>{a.emoji} {a.name}</Pill>)}</div>
             <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Nome Ospite</div>
@@ -775,9 +1000,8 @@ export default function App() {
               <div style={{flex:1}}><div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:10}}>Check-out</div><input type="date" value={form.checkout} onChange={e=>setForm(f=>({...f,checkout:e.target.value}))} style={S.input}/></div>
             </div>
             {form.checkin&&form.checkout&&parseDate(form.checkout)>parseDate(form.checkin)&&(()=>{
-              const n=nights(parseDate(form.checkin),parseDate(form.checkout));
-              const prc=parseFloat(form.price)||0;
-              return <div style={{textAlign:"center",margin:"4px 0 8px"}}>
+              const n=nights(parseDate(form.checkin),parseDate(form.checkout));const prc=parseFloat(form.price)||0;
+              return<div style={{textAlign:"center",margin:"4px 0 8px"}}>
                 <span style={{color:"#C8A96E",fontSize:12}}>{n} notti</span>
                 {prc>0&&<span style={{color:"#4CAF8A",fontSize:12,marginLeft:12}}>· €{fmtEur(prc/n)}/notte</span>}
                 {prc>0&&<span style={{color:"#7EC8E3",fontSize:12,marginLeft:8}}>· €{fmtEur(prc*taxMult/n)}/notte netto</span>}
@@ -805,6 +1029,7 @@ export default function App() {
           </div>
         )}
 
+        {/* ══ ADD MAINT ══ */}
         {view==="addMaint"&&(
           <div style={{padding:"0 14px"}}>
             <div style={{fontSize:15,color:"#ffd580",marginBottom:14,textAlign:"center",letterSpacing:1}}>{editMId!==null?"Modifica":"Nuova"} Manutenzione</div>
@@ -828,6 +1053,7 @@ export default function App() {
           </div>
         )}
 
+        {/* ══ SETTINGS ══ */}
         {view==="settings"&&(
           <div style={{padding:"0 14px"}}>
             <div style={{fontSize:15,color:"#C8A96E",marginBottom:16,textAlign:"center"}}>Impostazioni</div>
@@ -835,8 +1061,8 @@ export default function App() {
               <div style={{fontSize:12,color:"#4CAF8A",marginBottom:4}}>💾 Backup dati</div>
               <button onClick={()=>setShowExport(v=>!v)} style={{...S.btn("#1a3a2a","#4CAF8A"),width:"100%",padding:"12px 0",fontWeight:"bold",marginBottom:10,fontSize:14}}>{showExport?"▲ Nascondi":"⬇️ Mostra dati da copiare"}</button>
               {showExport&&(()=>{
-                const payload=JSON.stringify({version:1,exportedAt:new Date().toISOString(),bookings,maints,aptNames,taxRate,costRate});
-                return <div style={{marginBottom:10}}>
+                const payload=JSON.stringify({version:1,exportedAt:new Date().toISOString(),bookings,maints,costs,aptNames,taxRate,costRate});
+                return<div style={{marginBottom:10}}>
                   <textarea readOnly value={payload} rows={5} style={{...S.input,fontSize:10,fontFamily:"monospace",resize:"vertical",marginBottom:6}} onClick={e=>e.target.select()}/>
                   <button onClick={()=>navigator.clipboard?.writeText(payload).then(()=>showToast("Copiato ✓")).catch(()=>showToast("Seleziona e copia manualmente","error"))} style={{...S.btn("#1a2a3a","#4CAF8A"),width:"100%",padding:"10px 0",fontWeight:"bold"}}>📋 Copia negli appunti</button>
                 </div>;
@@ -858,7 +1084,7 @@ export default function App() {
               <div style={{flex:1}}><div style={{fontSize:10,color:"#999",marginBottom:5}}>Altri costi (%)</div><input type="number" value={costRate} onChange={e=>setCostRate(e.target.value)} placeholder="10" min="0" max="100" style={S.input}/></div>
             </div>
             <div style={{padding:"9px 12px",background:"rgba(126,200,227,0.08)",borderRadius:8,fontSize:12,color:"#999",marginBottom:18}}>Netto: {100-(parseFloat(taxRate)||0)-(parseFloat(costRate)||0)}%</div>
-            <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Chiave API Anthropic (per import AI)</div>
+            <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Chiave API Anthropic</div>
             <input type="password" value={anthropicKey} onChange={e=>setAnthropicKey(e.target.value)} placeholder="sk-ant-..." style={S.input}/>
             <div style={{fontSize:10,color:"#666",marginBottom:14}}>Necessaria per importare prenotazioni da foto/PDF</div>
             <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Cambia PIN Admin</div>
@@ -871,16 +1097,19 @@ export default function App() {
           </div>
         )}
 
+        {/* ══ BOTTOM NAV ══ */}
         <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(8,4,18,0.96)",backdropFilter:"blur(16px)",borderTop:"1px solid rgba(200,169,110,0.18)",display:"flex",justifyContent:"space-around",alignItems:"center",padding:"8px 0 14px",zIndex:100}}>
           <TabBtn label="Calendario" active={view==="calendar"} onClick={()=>setView("calendar")}>📅</TabBtn>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {canEdit&&<><button onClick={()=>{setEditId(null);setForm(emptyForm());setAiError(null);setView("add");}} style={{width:48,height:48,borderRadius:"50%",background:"#4CAF8A",border:"none",fontSize:22,color:"#1a0533",cursor:"pointer",boxShadow:"0 4px 18px rgba(76,175,138,0.4)"}}>+</button>
-            <button onClick={()=>{setEditMId(null);setMForm(emptyMForm());setView("addMaint");}} style={{width:36,height:36,borderRadius:"50%",background:"#ffd580",border:"none",fontSize:16,color:"#1a0533",cursor:"pointer"}}>M</button></>}
-            {!isViewMode&&!isAdmin&&<button onClick={()=>setShowPinModal(true)} style={{width:48,height:48,borderRadius:"50%",background:"rgba(255,255,255,0.07)",border:"1px solid #555",fontSize:20,color:"#555",cursor:"pointer"}}>🔒</button>}
+          <TabBtn label="Lista"      active={view==="list"}     onClick={()=>setView("list")}>📋</TabBtn>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            {canEdit&&<><button onClick={()=>{setEditId(null);setForm(emptyForm());setAiError(null);setView("add");}} style={{width:44,height:44,borderRadius:"50%",background:"#4CAF8A",border:"none",fontSize:20,color:"#1a0533",cursor:"pointer",boxShadow:"0 4px 18px rgba(76,175,138,0.4)"}}>+</button>
+            <button onClick={()=>{setEditMId(null);setMForm(emptyMForm());setView("addMaint");}} style={{width:32,height:32,borderRadius:"50%",background:"#ffd580",border:"none",fontSize:14,color:"#1a0533",cursor:"pointer"}}>M</button>
+            <button onClick={()=>{setEditCId(null);setCForm(emptyCForm());setView("addCost");}} style={{width:32,height:32,borderRadius:"50%",background:"#FF6B6B",border:"none",fontSize:14,color:"#1a0533",cursor:"pointer"}}>€</button></>}
+            {!isViewMode&&!isAdmin&&<button onClick={()=>setShowPinModal(true)} style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.07)",border:"1px solid #555",fontSize:18,color:"#555",cursor:"pointer"}}>🔒</button>}
           </div>
-          <TabBtn label="Lista"       active={view==="list"}     onClick={()=>setView("list")}>📋</TabBtn>
-          <TabBtn label="Statistiche" active={view==="stats"}    onClick={()=>setView("stats")}>📊</TabBtn>
-          <TabBtn label="Opzioni"     active={view==="settings"} onClick={()=>setView("settings")}>⚙️</TabBtn>
+          <TabBtn label="Costi"      active={view==="costs"}    onClick={()=>setView("costs")}>💸</TabBtn>
+          <TabBtn label="Statistiche" active={view==="stats"}   onClick={()=>setView("stats")}>📊</TabBtn>
+          <TabBtn label="Opzioni"    active={view==="settings"} onClick={()=>setView("settings")}>⚙️</TabBtn>
         </div>
       </div>
     </div>
