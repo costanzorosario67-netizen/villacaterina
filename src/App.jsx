@@ -660,7 +660,7 @@ export default function App() {
               const totMese=totCostMonth+maintMonth;
               return <>
                 <div style={{display:"flex",gap:8,marginBottom:8}}>
-                  <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#FF6B6B"}}>€{fmtEur(totCostYear)}</div><div style={{fontSize:9,color:"#999"}}>UTENZE ANNO</div></div>
+                  <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#FF6B6B"}}>€{fmtEur(totCostYear)}</div><div style={{fontSize:9,color:"#999"}}>TOTALE COSTI ANNO</div></div>
                   <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#ffd580"}}>€{fmtEur(maintYear)}</div><div style={{fontSize:9,color:"#999"}}>MANUT. ANNO</div></div>
                 </div>
                 <div style={{background:"rgba(255,100,100,0.1)",border:"1px solid rgba(255,100,100,0.3)",borderRadius:10,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -668,7 +668,7 @@ export default function App() {
                   <span style={{fontSize:18,fontWeight:"bold",color:"#FF6B6B"}}>€{fmtEur(totAnno)}</span>
                 </div>
                 <div style={{display:"flex",gap:8,marginBottom:8}}>
-                  <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#FF6B6B"}}>€{fmtEur(totCostMonth)}</div><div style={{fontSize:9,color:"#999"}}>UTENZE {MONTHS_SHORT[costsMonth]}</div></div>
+                  <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#FF6B6B"}}>€{fmtEur(totCostMonth)}</div><div style={{fontSize:9,color:"#999"}}>COSTI MESE</div></div>
                   <div style={S.card}><div style={{fontSize:15,fontWeight:"bold",color:"#ffd580"}}>€{fmtEur(maintMonth)}</div><div style={{fontSize:9,color:"#999"}}>MANUT. {MONTHS_SHORT[costsMonth]}</div></div>
                 </div>
                 <div style={{background:"rgba(255,150,50,0.1)",border:"1px solid rgba(255,150,50,0.3)",borderRadius:10,padding:"12px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -750,40 +750,6 @@ export default function App() {
                     <div style={{fontSize:11,color:"#FF6B6B",textAlign:"right",fontWeight:"bold"}}>-€{fmtEur(monthly.reduce((s,m)=>s+m.cst,0))}</div>
                     <div style={{fontSize:11,color:"#7EC8E3",textAlign:"right",fontWeight:"bold"}}>€{fmtEur(monthly.reduce((s,m)=>s+m.margin,0))}</div>
                   </div>
-                </div>
-              </div>;
-            })()}
-
-            {/* Riepilogo per categoria */}
-            {(()=>{
-              const maintYear=maints.filter(m=>{const d=parseDate(m.date);return d&&d.getFullYear()===costsYear;}).reduce((s,m)=>s+(parseFloat(m.cost)||0),0);
-              const rows=[
-                ...ALL_COST_TYPES.map(ct=>{
-                  const tot=costs.filter(c=>c.type===ct.id&&c.year===costsYear).reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
-                  return{...ct,tot};
-                }),
-                {id:"manutenzione",label:"Manutenzione",emoji:"🛠️",color:"#ffd580",tot:maintYear},
-              ].filter(r=>r.tot>0);
-              const grandTotal=rows.reduce((s,r)=>s+r.tot,0);
-              if(rows.length===0) return null;
-              return<div style={{background:"rgba(255,255,255,0.04)",borderRadius:11,padding:14,marginBottom:14,border:"1px solid rgba(255,100,100,0.15)"}}>
-                <div style={{fontSize:10,color:"#FF6B6B",letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>📊 Riepilogo per categoria — {costsYear}</div>
-                {rows.map(r=>{
-                  const pct=grandTotal>0?r.tot/grandTotal*100:0;
-                  return<div key={r.id} style={{marginBottom:12}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                      <div style={{fontSize:13,display:"flex",alignItems:"center",gap:6}}><span>{r.emoji}</span><span style={{color:r.color,fontWeight:"bold"}}>{r.label}</span></div>
-                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                        <span style={{fontSize:12,color:"#aaa"}}>{pct.toFixed(0)}%</span>
-                        <span style={{fontSize:14,fontWeight:"bold",color:r.color}}>€{fmtEur(r.tot)}</span>
-                      </div>
-                    </div>
-                    <div style={{height:6,background:"rgba(255,255,255,0.06)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",background:r.color,borderRadius:3}}/></div>
-                  </div>;
-                })}
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",background:"rgba(255,100,100,0.1)",borderRadius:8,marginTop:4,borderTop:"1px solid rgba(255,100,100,0.2)"}}>
-                  <span style={{fontSize:12,color:"#FF6B6B",fontWeight:"bold"}}>Totale complessivo</span>
-                  <span style={{fontSize:16,fontWeight:"bold",color:"#FF6B6B"}}>€{fmtEur(grandTotal)}</span>
                 </div>
               </div>;
             })()}
