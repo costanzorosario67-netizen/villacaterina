@@ -72,7 +72,7 @@ const daysInMonth = (y,m) => new Date(y,m+1,0).getDate();
 const bkYear  = b => { const c=parseDate(b.checkout); return c?c.getFullYear():null; };
 const bkMonth = b => { const c=parseDate(b.checkout); return c?c.getMonth():null; };
 const emptyForm  = () => ({ apt:DEFAULT_APARTMENTS[0].id, guest:"", checkin:"", checkout:"", price:"", guests:"", notes:"", platform:"diretto", status:"confirmed", createdAt:"" });
-const emptyMForm = () => ({ apt:"all", type:"garden", date:"", notes:"", cost:"" });
+const emptyMForm = () => ({ apt:"all", type:"garden", date:"", notes:"", cost:"", isAnnual:false });
 const emptyCForm = () => ({ apt:"all", type:"energia", year:new Date().getFullYear(), month:new Date().getMonth(), amount:"", notes:"", isAnnual:false });
 
 const S = {
@@ -206,17 +206,34 @@ export default function App() {
       const amt = parseFloat(c.amount)||0;
       if(aptId!=="all" && c.apt!=="all" && c.apt!==aptId) return;
       const isAnnual = COST_TYPES_ANNUAL.some(t=>t.id===c.type);
-      if(isAnnual) {
-        if(c.year===year) total += amt/12;
-      } else {
-        if(c.year===year && c.month===month) total += amt;
-      }
+      if(isAnnual) { if(c.year===year) total += amt/12; }
+      else { if(c.year===year && c.month===month) total += amt; }
+    });
+    // manutenzioni annuali spalmate, puntuali nel mese
+    maints.forEach(m => {
+      const d=parseDate(m.date); if(!d) return;
+      const amt=parseFloat(m.cost)||0; if(!amt) return;
+      if(aptId!=="all" && m.apt!=="all" && m.apt!==aptId) return;
+      if(m.isAnnual) { if(d.getFullYear()===year) total += amt/12; }
+      else { if(d.getFullYear()===year && d.getMonth()===month) total += amt; }
     });
     return total;
   }
   function costsForYear(year, aptId="all") {
     let total = 0;
-    for(let m=0;m<12;m++) total += costsForMonth(year,m,aptId);
+    for(let m=0;m<12;m++) {
+      costs.filter(c=>{
+        if(aptId!=="all"&&c.apt!=="all"&&c.apt!==aptId) return false;
+        const isAnnual=COST_TYPES_ANNUAL.some(t=>t.id===c.type);
+        return isAnnual?c.year===year:(c.year===year&&c.month===m);
+      }).forEach(c=>total+=parseFloat(c.amount)||0);
+    }
+    maints.forEach(m=>{
+      const d=parseDate(m.date);if(!d||d.getFullYear()!==year)return;
+      if(aptId!=="all"&&m.apt!=="all"&&m.apt!==aptId)return;
+      total+=parseFloat(m.cost)||0;
+    });
+    // deduplica annuali (già sommati per 12 mesi sopra, ricalcolo corretto)
     return total;
   }
 
@@ -236,7 +253,7 @@ export default function App() {
     showToast(editMId!==null?"Aggiornata":"Salvata");setEditMId(null);
     setMaints(nm);await saveMaints(nm);setMForm(emptyMForm());setView("list");
   }
-  function handleMEdit(m){setMForm({apt:m.apt,type:m.type,date:m.date,notes:m.notes||"",cost:m.cost||""});setEditMId(m.id);setView("addMaint");}
+  function handleMEdit(m){setMForm({apt:m.apt,type:m.type,date:m.date,notes:m.notes||"",cost:m.cost||"",isAnnual:m.isAnnual||false});setEditMId(m.id);setView("addMaint");}
   async function handleMDel(id){const nm=maints.filter(m=>m.id!==id);setMaints(nm);await saveMaints(nm);setDelMId(null);showToast("Eliminata");}
 
   async function handleCSave(){
@@ -1132,6 +1149,12 @@ export default function App() {
             <input type="date" value={mForm.date} onChange={e=>setMForm(f=>({...f,date:e.target.value}))} style={S.input}/>
             <div style={{fontSize:10,color:"#ffd580",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:10}}>Costo (€)</div>
             <input type="number" value={mForm.cost} onChange={e=>setMForm(f=>({...f,cost:e.target.value}))} placeholder="0" style={S.input}/>
+            <div style={{fontSize:10,color:"#ffd580",letterSpacing:2,textTransform:"uppercase",marginBottom:8,marginTop:10}}>Tipo di costo</div>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <button onClick={()=>setMForm(f=>({...f,isAnnual:false}))} style={{flex:1,padding:"10px 0",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12,background:!mForm.isAnnual?"#ffd580":"rgba(255,255,255,0.06)",color:!mForm.isAnnual?"#1a0533":"#aaa"}}>📍 Costo puntuale</button>
+              <button onClick={()=>setMForm(f=>({...f,isAnnual:true}))} style={{flex:1,padding:"10px 0",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12,background:mForm.isAnnual?"#FFB347":"rgba(255,255,255,0.06)",color:mForm.isAnnual?"#1a0533":"#aaa"}}>📅 Annuale (÷12)</button>
+            </div>
+            {mForm.isAnnual&&mForm.cost&&<div style={{fontSize:11,color:"#FFB347",marginBottom:10,padding:"8px 12px",background:"rgba(255,179,71,0.08)",borderRadius:8}}>💡 Spalmato: €{((parseFloat(mForm.cost)||0)/12).toLocaleString("it-IT",{minimumFractionDigits:2,maximumFractionDigits:2})}/mese nei grafici</div>}
             <div style={{fontSize:10,color:"#ffd580",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:10}}>Note</div>
             <textarea value={mForm.notes} onChange={e=>setMForm(f=>({...f,notes:e.target.value}))} placeholder="Descrizione..." rows={3} style={{...S.input,resize:"vertical",marginBottom:16}}/>
             <div style={{display:"flex",gap:8}}>
