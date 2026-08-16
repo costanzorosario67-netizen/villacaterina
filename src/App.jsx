@@ -52,6 +52,8 @@ const COST_TYPES_MONTHLY = [
 const COST_TYPES_ANNUAL = [
   { id:"assicurazione", label:"Assicurazione", emoji:"🏠", color:"#FFB347" },
   { id:"tasse",         label:"Tasse comunali", emoji:"🏛️", color:"#D94F5C" },
+  { id:"agenzia",       label:"Extra costi agenzia", emoji:"🏢", color:"#7EC8E3" },
+  { id:"altro_annuale", label:"Altro",          emoji:"📋", color:"#888888" },
 ];
 const ALL_COST_TYPES = [...COST_TYPES_MONTHLY, ...COST_TYPES_ANNUAL];
 
