@@ -146,6 +146,7 @@ export default function App() {
   const [hideAmounts, setHideAmounts] = useState(false);
   const [listFilter, setListFilter]   = useState("all");
   const [expandedCostCat, setExpandedCostCat] = useState(null);
+  const [costsYear, setCostsYear]     = useState(new Date().getFullYear());
   const [costsMonth, setCostsMonth]   = useState(new Date().getMonth());
   const [aiLoading, setAiLoading]     = useState(false);
   const [aiError, setAiError]         = useState(null);
