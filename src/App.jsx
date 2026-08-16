@@ -145,7 +145,7 @@ export default function App() {
   const [importText, setImportText]   = useState("");
   const [hideAmounts, setHideAmounts] = useState(false);
   const [listFilter, setListFilter]   = useState("all");
-  const [costsYear, setCostsYear]     = useState(new Date().getFullYear());
+  const [expandedCostCat, setExpandedCostCat] = useState(null);
   const [costsMonth, setCostsMonth]   = useState(new Date().getMonth());
   const [aiLoading, setAiLoading]     = useState(false);
   const [aiError, setAiError]         = useState(null);
@@ -694,15 +694,37 @@ export default function App() {
                 <div style={{fontSize:10,color:"#FF6B6B",letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>📊 Riepilogo per categoria — {costsYear}</div>
                 {rows.map(r=>{
                   const pct=grandTotal>0?r.tot/grandTotal*100:0;
+                  const isOpen=expandedCostCat===r.id;
+                  // dettaglio voci
+                  const items = r.id==="manutenzione"
+                    ? maints.filter(m=>{const d=parseDate(m.date);return d&&d.getFullYear()===costsYear&&(parseFloat(m.cost)||0)>0;})
+                        .map(m=>({label:mtLabel(m.type)+" · "+(m.apt==="all"?"Tutta la villa":aptLabel(m.apt)),amount:parseFloat(m.cost)||0,sub:fmtDate(parseDate(m.date))+(m.isAnnual?" · annuale ÷12":""),notes:m.notes}))
+                    : costs.filter(c=>c.type===r.id&&c.year===costsYear)
+                        .map(c=>({label:aptLabel(c.apt)==="all"?"Tutta la villa":aptLabel(c.apt),amount:parseFloat(c.amount)||0,sub:COST_TYPES_ANNUAL.some(t=>t.id===c.type)?`Anno ${c.year} · ÷12 = €${fmtEur(c.amount/12)}/mese`:`${MONTHS[c.month]} ${c.year}`,notes:c.notes}));
                   return<div key={r.id} style={{marginBottom:12}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                      <div style={{fontSize:13,display:"flex",alignItems:"center",gap:6}}><span>{r.emoji}</span><span style={{color:r.color,fontWeight:"bold"}}>{r.label}</span></div>
+                    <div onClick={()=>setExpandedCostCat(isOpen?null:r.id)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,cursor:"pointer"}}>
+                      <div style={{fontSize:13,display:"flex",alignItems:"center",gap:6}}>
+                        <span>{r.emoji}</span>
+                        <span style={{color:r.color,fontWeight:"bold"}}>{r.label}</span>
+                        <span style={{fontSize:10,color:"#555"}}>{isOpen?"▲":"▼"}</span>
+                      </div>
                       <div style={{display:"flex",gap:8,alignItems:"center"}}>
                         <span style={{fontSize:12,color:"#aaa"}}>{pct.toFixed(0)}%</span>
                         <span style={{fontSize:14,fontWeight:"bold",color:r.color}}>€{fmtEur(r.tot)}</span>
                       </div>
                     </div>
-                    <div style={{height:6,background:"rgba(255,255,255,0.06)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",background:r.color,borderRadius:3}}/></div>
+                    <div style={{height:6,background:"rgba(255,255,255,0.06)",borderRadius:3,overflow:"hidden",marginBottom:isOpen?8:0}}><div style={{height:"100%",width:pct+"%",background:r.color,borderRadius:3}}/></div>
+                    {isOpen&&<div style={{background:"rgba(0,0,0,0.2)",borderRadius:8,padding:"8px 10px",marginTop:4}}>
+                      {items.length===0&&<div style={{fontSize:11,color:"#666",textAlign:"center"}}>Nessuna voce</div>}
+                      {items.map((it,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"6px 0",borderBottom:i<items.length-1?"1px solid rgba(255,255,255,0.06)":"none"}}>
+                        <div>
+                          <div style={{fontSize:12,color:"#f0e6d3"}}>{it.label}</div>
+                          <div style={{fontSize:10,color:"#666"}}>{it.sub}</div>
+                          {it.notes&&<div style={{fontSize:10,color:"#888",fontStyle:"italic"}}>{it.notes}</div>}
+                        </div>
+                        <div style={{fontSize:13,fontWeight:"bold",color:r.color,whiteSpace:"nowrap",marginLeft:10}}>€{fmtEur(it.amount)}</div>
+                      </div>)}
+                    </div>}
                   </div>;
                 })}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",background:"rgba(255,100,100,0.1)",borderRadius:8,marginTop:4,borderTop:"1px solid rgba(255,100,100,0.2)"}}>
