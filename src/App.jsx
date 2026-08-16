@@ -209,7 +209,6 @@ export default function App() {
       if(isAnnual) { if(c.year===year) total += amt/12; }
       else { if(c.year===year && c.month===month) total += amt; }
     });
-    // manutenzioni annuali spalmate, puntuali nel mese
     maints.forEach(m => {
       const d=parseDate(m.date); if(!d) return;
       const amt=parseFloat(m.cost)||0; if(!amt) return;
@@ -220,20 +219,21 @@ export default function App() {
     return total;
   }
   function costsForYear(year, aptId="all") {
+    // Costi utenze: annuali per intero, mensili sommati
     let total = 0;
-    for(let m=0;m<12;m++) {
-      costs.filter(c=>{
-        if(aptId!=="all"&&c.apt!=="all"&&c.apt!==aptId) return false;
-        const isAnnual=COST_TYPES_ANNUAL.some(t=>t.id===c.type);
-        return isAnnual?c.year===year:(c.year===year&&c.month===m);
-      }).forEach(c=>total+=parseFloat(c.amount)||0);
-    }
-    maints.forEach(m=>{
-      const d=parseDate(m.date);if(!d||d.getFullYear()!==year)return;
-      if(aptId!=="all"&&m.apt!=="all"&&m.apt!==aptId)return;
-      total+=parseFloat(m.cost)||0;
+    costs.forEach(c => {
+      const amt = parseFloat(c.amount)||0;
+      if(aptId!=="all" && c.apt!=="all" && c.apt!==aptId) return;
+      const isAnnual = COST_TYPES_ANNUAL.some(t=>t.id===c.type);
+      if(isAnnual) { if(c.year===year) total += amt; }
+      else { if(c.year===year) total += amt; }
     });
-    // deduplica annuali (già sommati per 12 mesi sopra, ricalcolo corretto)
+    // Manutenzioni: sempre per intero (annuali o puntuali)
+    maints.forEach(m => {
+      const d=parseDate(m.date); if(!d||d.getFullYear()!==year) return;
+      if(aptId!=="all" && m.apt!=="all" && m.apt!==aptId) return;
+      total += parseFloat(m.cost)||0;
+    });
     return total;
   }
 
