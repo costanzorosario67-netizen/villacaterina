@@ -781,11 +781,11 @@ export default function App() {
             })}
             {/* Lista manutenzioni nel mese */}
             {(()=>{
-              const maintMonth=maints.filter(m=>{const d=parseDate(m.date);return d&&d.getFullYear()===costsYear&&(parseFloat(m.cost)||0)>0;});
-              if(maintMonth.length===0) return null;
+              const maintAll=maints.filter(m=>(parseFloat(m.cost)||0)>0).sort((a,b)=>a.date.localeCompare(b.date));
               return<div style={{marginTop:14}}>
-                <div style={{fontSize:10,color:"#ffd580",letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>🛠️ Manutenzioni — {costsYear}</div>
-                {maintMonth.map(m=>{
+                <div style={{fontSize:10,color:"#ffd580",letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>🛠️ Tutte le manutenzioni</div>
+                {maintAll.length===0&&<div style={{textAlign:"center",padding:"20px 0",color:"#666"}}>Nessuna manutenzione inserita</div>}
+                {maintAll.map(m=>{
                   const costo=parseFloat(m.cost)||0;
                   const mensile=costo/12;
                   return<div key={m.id} style={{background:"rgba(255,200,80,0.06)",borderRadius:10,padding:12,marginBottom:8,borderLeft:"4px solid #ffd580"}}>
@@ -797,7 +797,7 @@ export default function App() {
                       </div>
                       <div style={{textAlign:"right"}}>
                         <div style={{fontSize:16,fontWeight:"bold",color:"#ffd580"}}>€{fmtEur(costo)}</div>
-                        <div style={{fontSize:10,color:"#666"}}>totale anno ÷12</div>
+                        <div style={{fontSize:10,color:"#666"}}>÷12 mesi</div>
                       </div>
                     </div>
                     {m.notes&&<div style={{fontSize:11,color:"#aaa",fontStyle:"italic",marginTop:7}}>{m.notes}</div>}
