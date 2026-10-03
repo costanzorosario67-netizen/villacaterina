@@ -779,10 +779,36 @@ export default function App() {
                 </div>}
               </div>;
             })}
-          </div>;
-        })()}
-
-        {/* ══ ADD COST ══ */}
+            {/* Lista manutenzioni nel mese */}
+            {(()=>{
+              const maintMonth=maints.filter(m=>{const d=parseDate(m.date);return d&&d.getFullYear()===costsYear&&(parseFloat(m.cost)||0)>0;});
+              if(maintMonth.length===0) return null;
+              return<div style={{marginTop:14}}>
+                <div style={{fontSize:10,color:"#ffd580",letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>🛠️ Manutenzioni — {costsYear}</div>
+                {maintMonth.map(m=>{
+                  const costo=parseFloat(m.cost)||0;
+                  const mensile=costo/12;
+                  return<div key={m.id} style={{background:"rgba(255,200,80,0.06)",borderRadius:10,padding:12,marginBottom:8,borderLeft:"4px solid #ffd580"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                      <div>
+                        <div style={{fontSize:14}}>{mtEmoji(m.type)} {mtLabel(m.type)}</div>
+                        <div style={{fontSize:11,color:"#aaa"}}>{m.apt==="all"?"Tutta la villa":aptEmoji(m.apt)+" "+aptLabel(m.apt)}</div>
+                        <div style={{fontSize:10,color:"#ffd580",marginTop:2}}>{fmtDate(parseDate(m.date))} · €{fmtEur(mensile)}/mese</div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:16,fontWeight:"bold",color:"#ffd580"}}>€{fmtEur(costo)}</div>
+                        <div style={{fontSize:10,color:"#666"}}>totale anno ÷12</div>
+                      </div>
+                    </div>
+                    {m.notes&&<div style={{fontSize:11,color:"#aaa",fontStyle:"italic",marginTop:7}}>{m.notes}</div>}
+                    {canEdit&&<div style={{display:"flex",gap:7,marginTop:9}}>
+                      <button onClick={()=>handleMEdit(m)} style={{...S.btn("#2a2a1a","#ffd580"),flex:1,fontSize:12,padding:"7px 0"}}>Modifica</button>
+                      <button onClick={()=>setDelMId(m.id)} style={{...S.btn("#3a1a1a","#D94F5C"),flex:1,fontSize:12,padding:"7px 0"}}>Elimina</button>
+                    </div>}
+                  </div>;
+                })}
+              </div>;
+            })()}
         {view==="addCost"&&(()=>{
           const isAnnual=COST_TYPES_ANNUAL.some(t=>t.id===cForm.type);
           return<div style={{padding:"0 14px"}}>
