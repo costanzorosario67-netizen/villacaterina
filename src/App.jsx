@@ -566,6 +566,7 @@ export default function App() {
                 <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#C8A96E"}}>{filteredBookings.length}</div><div style={{fontSize:9,color:"#999"}}>PRENOT.</div></div>
                 <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#4CAF8A"}}>€{fmtEur(filteredBookings.reduce((s,b)=>s+(parseFloat(b.price)||0),0))}</div><div style={{fontSize:9,color:"#999"}}>LORDO</div></div>
                 <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#7EC8E3"}}>€{fmtEur(filteredBookings.reduce((s,b)=>s+(parseFloat(b.price)||0),0)*taxMult)}</div><div style={{fontSize:9,color:"#999"}}>NETTO</div></div>
+                <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#FFB347"}}>{filteredBookings.reduce((s,b)=>s+(parseInt(b.guests)||0),0)}</div><div style={{fontSize:9,color:"#999"}}>OSPITI</div></div>
               </div>
               {filteredBookings.length===0&&<div style={{textAlign:"center",padding:"28px 0",color:"#666"}}>Nessuna prenotazione</div>}
               {filteredBookings.map(b=>{
