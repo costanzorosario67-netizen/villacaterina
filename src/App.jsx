@@ -557,7 +557,7 @@ export default function App() {
         {view==="list"&&(
           <div style={{padding:"0 12px"}}>
             <div style={{display:"flex",gap:6,marginBottom:14}}>
-              <Pill active={listFilter==="all"}      color="#C8A96E" onClick={()=>setListFilter("all")}>📋 Prenotazioni</Pill>
+              <Pill active={true} color="#C8A96E" onClick={()=>{}}>📋 Prenotazioni</Pill>
             </div>
             {listFilter!=="maint"&&<>
               <div style={{display:"flex",gap:8,marginBottom:14}}>
@@ -605,7 +605,7 @@ export default function App() {
                   </div>
                 </div>;
               })}
-            </>}
+            </>
           </div>
         )}
 
