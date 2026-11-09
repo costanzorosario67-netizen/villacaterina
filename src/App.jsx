@@ -148,6 +148,9 @@ export default function App() {
   const [expandedCostCat, setExpandedCostCat] = useState(null);
   const [costsYear, setCostsYear]     = useState(new Date().getFullYear());
   const [costsMonth, setCostsMonth]   = useState(new Date().getMonth());
+  const [energyApt, setEnergyApt]     = useState("all");
+  const [cSplitMode, setCSplitMode]   = useState(false);
+  const [cSplit, setCSplit]           = useState({zaffiro:"",diamante:"",rubino:"",smeraldo:""});
   const [aiLoading, setAiLoading]     = useState(false);
   const [aiError, setAiError]         = useState(null);
   const fileInputRef = useRef(null);
@@ -258,8 +261,20 @@ export default function App() {
   async function handleMDel(id){const nm=maints.filter(m=>m.id!==id);setMaints(nm);await saveMaints(nm);setDelMId(null);showToast("Eliminata");}
 
   async function handleCSave(){
-    if(!cForm.amount){showToast("Inserisci l'importo","error");return;}
     const isAnnual=COST_TYPES_ANNUAL.some(t=>t.id===cForm.type);
+    if(cSplitMode&&editCId===null&&!isAnnual){
+      const base=Date.now();
+      const newEntries=["zaffiro","diamante","rubino","smeraldo"]
+        .filter(id=>(parseFloat(cSplit[id])||0)>0)
+        .map((id,i)=>({...cForm,apt:id,id:base+i,isAnnual:false,amount:parseFloat(cSplit[id])}));
+      if(newEntries.length===0){showToast("Inserisci almeno un importo","error");return;}
+      const ncs=[...costs,...newEntries];
+      showToast(newEntries.length+" costi salvati");
+      setCosts(ncs);await saveCosts(ncs);
+      setCForm(emptyCForm());setCSplit({zaffiro:"",diamante:"",rubino:"",smeraldo:""});setCSplitMode(false);setView("costs");
+      return;
+    }
+    if(!cForm.amount){showToast("Inserisci l'importo","error");return;}
     const entry={...cForm,id:editCId||Date.now(),isAnnual,amount:parseFloat(cForm.amount)};
     let nc=editCId!==null?costs.map(c=>c.id===editCId?entry:c):[...costs,entry];
     showToast(editCId!==null?"Aggiornato":"Salvato");setEditCId(null);
@@ -557,15 +572,14 @@ export default function App() {
         {view==="list"&&(
           <div style={{padding:"0 12px"}}>
             <div style={{display:"flex",gap:6,marginBottom:14}}>
-              <Pill active={listFilter==="all"}      color="#C8A96E" onClick={()=>setListFilter("all")}>Tutto</Pill>
-              <Pill active={listFilter==="bookings"} color="#4CAF8A" onClick={()=>setListFilter("bookings")}>📋 Prenotazioni</Pill>
-              <Pill active={listFilter==="maint"}    color="#ffd580" onClick={()=>setListFilter("maint")}>🛠️ Manutenzioni</Pill>
+              <Pill active={true} color="#C8A96E" onClick={()=>{}}>📋 Prenotazioni</Pill>
             </div>
             {listFilter!=="maint"&&<>
               <div style={{display:"flex",gap:8,marginBottom:14}}>
                 <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#C8A96E"}}>{filteredBookings.length}</div><div style={{fontSize:9,color:"#999"}}>PRENOT.</div></div>
                 <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#4CAF8A"}}>€{fmtEur(filteredBookings.reduce((s,b)=>s+(parseFloat(b.price)||0),0))}</div><div style={{fontSize:9,color:"#999"}}>LORDO</div></div>
                 <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#7EC8E3"}}>€{fmtEur(filteredBookings.reduce((s,b)=>s+(parseFloat(b.price)||0),0)*taxMult)}</div><div style={{fontSize:9,color:"#999"}}>NETTO</div></div>
+                <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#FFB347"}}>{filteredBookings.reduce((s,b)=>s+(parseInt(b.guests)||0),0)}</div><div style={{fontSize:9,color:"#999"}}>OSPITI</div></div>
               </div>
               {filteredBookings.length===0&&<div style={{textAlign:"center",padding:"28px 0",color:"#666"}}>Nessuna prenotazione</div>}
               {filteredBookings.map(b=>{
@@ -606,28 +620,7 @@ export default function App() {
                   </div>
                 </div>;
               })}
-            </>}
-            {listFilter!=="bookings"&&<>
-              {listFilter==="maint"&&<div style={{display:"flex",gap:8,marginBottom:14}}>
-                <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#ffd580"}}>{filteredMaints.length}</div><div style={{fontSize:9,color:"#999"}}>MANUT.</div></div>
-                <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#D94F5C"}}>€{fmtEur(filteredMaints.reduce((s,m)=>s+(parseFloat(m.cost)||0),0))}</div><div style={{fontSize:9,color:"#999"}}>COSTO TOT.</div></div>
-              </div>}
-              {listFilter==="all"&&filteredMaints.length>0&&<div style={{fontSize:10,color:"#ffd580",letterSpacing:3,textTransform:"uppercase",margin:"16px 0 8px",borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:14}}>Manutenzioni</div>}
-              {filteredMaints.length===0&&<div style={{textAlign:"center",padding:"28px 0",color:"#666"}}>Nessuna manutenzione</div>}
-              {filteredMaints.map(m=>(
-                <div key={m.id} style={{background:"rgba(255,200,80,0.06)",borderRadius:10,padding:12,marginBottom:8,borderLeft:"4px solid #ffd580"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div><div style={{fontSize:14}}>{mtEmoji(m.type)} {mtLabel(m.type)}</div><div style={{fontSize:11,color:"#aaa"}}>{m.apt==="all"?"Tutta la villa":aptEmoji(m.apt)+" "+aptLabel(m.apt)}</div></div>
-                    <div style={{textAlign:"right"}}><div style={{fontSize:12,color:"#ffd580"}}>{fmtDate(parseDate(m.date))}</div>{m.cost&&<div style={{fontSize:12,color:"#D94F5C"}}>€{fmtEur(parseFloat(m.cost))}</div>}</div>
-                  </div>
-                  {m.notes&&<div style={{fontSize:11,color:"#aaa",fontStyle:"italic",marginTop:7}}>{m.notes}</div>}
-                  {canEdit&&<div style={{display:"flex",gap:7,marginTop:9}}>
-                    <button onClick={()=>handleMEdit(m)} style={{...S.btn("#2a2a1a","#ffd580"),flex:1,fontSize:12,padding:"7px 0"}}>Modifica</button>
-                    <button onClick={()=>setDelMId(m.id)} style={{...S.btn("#3a1a1a","#D94F5C"),flex:1,fontSize:12,padding:"7px 0"}}>Elimina</button>
-                  </div>}
-                </div>
-              ))}
-            </>}
+            </>
           </div>
         )}
 
@@ -677,6 +670,54 @@ export default function App() {
                   <span style={{fontSize:18,fontWeight:"bold",color:"#FFB347"}}>€{fmtEur(totMese)}</span>
                 </div>
               </>;
+            })()}
+
+            {/* Energia per appartamento */}
+            {(()=>{
+              const ENERGY_APTS=["zaffiro","diamante","rubino","smeraldo"];
+              const energyAll=costs.filter(c=>c.type==="energia"&&c.year===costsYear);
+              const shown=energyApt==="all"?energyAll:energyAll.filter(c=>c.apt===energyApt);
+              const sumOf=list=>list.reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+              const totYearE=sumOf(shown);
+              const totMonthE=sumOf(shown.filter(c=>c.month===costsMonth));
+              const sorted=[...shown].sort((a,b)=>(a.month-b.month)||String(a.apt).localeCompare(String(b.apt)));
+              const breakdown=[...ENERGY_APTS,"all"].map(id=>({id,tot:sumOf(energyAll.filter(c=>c.apt===id))}));
+              return<div style={{background:"rgba(255,199,44,0.06)",border:"1px solid rgba(255,199,44,0.25)",borderRadius:11,padding:14,marginBottom:14}}>
+                <div style={{fontSize:10,color:"#FFC72C",letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>⚡ Energia — {costsYear}</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
+                  <Pill active={energyApt==="all"} color="#FFC72C" onClick={()=>setEnergyApt("all")}>Totale</Pill>
+                  {apts.filter(a=>ENERGY_APTS.includes(a.id)).map(a=><Pill key={a.id} active={energyApt===a.id} color={a.color} onClick={()=>setEnergyApt(a.id)}>{a.emoji} {a.name}</Pill>)}
+                </div>
+                <div style={{display:"flex",gap:8,marginBottom:12}}>
+                  <div style={S.card}><div style={{fontSize:16,fontWeight:"bold",color:"#FFC72C"}}>€{fmtEur(totYearE)}</div><div style={{fontSize:9,color:"#999"}}>ENERGIA ANNO {costsYear}</div></div>
+                  <div style={S.card}><div style={{fontSize:16,fontWeight:"bold",color:"#FFB347"}}>€{fmtEur(totMonthE)}</div><div style={{fontSize:9,color:"#999"}}>ENERGIA {MONTHS_SHORT[costsMonth].toUpperCase()}</div></div>
+                </div>
+                {energyApt==="all"&&<div style={{marginBottom:12}}>
+                  {breakdown.map(r=>{
+                    if(r.id==="all"&&r.tot===0) return null;
+                    return<div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0"}}>
+                      <span style={{fontSize:12,color:r.id==="all"?"#C8A96E":aptColor(r.id)}}>{r.id==="all"?"🏰 Tutta la villa (non divisa)":aptEmoji(r.id)+" "+aptLabel(r.id)}</span>
+                      <span style={{fontSize:13,fontWeight:"bold",color:r.tot>0?"#f0e6d3":"#555"}}>€{fmtEur(r.tot)}</span>
+                    </div>;
+                  })}
+                </div>}
+                <div style={{fontSize:10,color:"#999",letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>Voci inserite ({sorted.length})</div>
+                {sorted.length===0&&<div style={{textAlign:"center",padding:"14px 0",color:"#666",fontSize:12}}>Nessun costo energia inserito</div>}
+                {sorted.map(c=><div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+                  <div>
+                    <div style={{fontSize:12,color:"#f0e6d3"}}>{MONTHS[c.month]} {c.year}</div>
+                    <div style={{fontSize:10,color:aptColor(c.apt)}}>{c.apt==="all"?"Tutta la villa":aptEmoji(c.apt)+" "+aptLabel(c.apt)}</div>
+                    {c.notes&&<div style={{fontSize:10,color:"#888",fontStyle:"italic"}}>{c.notes}</div>}
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:14,fontWeight:"bold",color:"#FFC72C"}}>€{fmtEur(parseFloat(c.amount)||0)}</span>
+                    {canEdit&&<>
+                      <button onClick={()=>handleCEdit(c)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:7,padding:"5px 8px",cursor:"pointer",fontSize:12}}>✏️</button>
+                      <button onClick={()=>setDelCId(c.id)} style={{background:"rgba(217,79,92,0.15)",border:"1px solid rgba(217,79,92,0.4)",borderRadius:7,padding:"5px 8px",cursor:"pointer",fontSize:12}}>🗑️</button>
+                    </>}
+                  </div>
+                </div>)}
+              </div>;
             })()}
 
             {/* Riepilogo per categoria */}
@@ -801,10 +842,36 @@ export default function App() {
                 </div>}
               </div>;
             })}
-          </div>;
-        })()}
-
-        {/* ══ ADD COST ══ */}
+            {/* Lista manutenzioni nel mese */}
+            {(()=>{
+              const maintAll=maints.filter(m=>(parseFloat(m.cost)||0)>0).sort((a,b)=>a.date.localeCompare(b.date));
+              return<div style={{marginTop:14}}>
+                <div style={{fontSize:10,color:"#ffd580",letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>🛠️ Tutte le manutenzioni</div>
+                {maintAll.length===0&&<div style={{textAlign:"center",padding:"20px 0",color:"#666"}}>Nessuna manutenzione inserita</div>}
+                {maintAll.map(m=>{
+                  const costo=parseFloat(m.cost)||0;
+                  const mensile=costo/12;
+                  return<div key={m.id} style={{background:"rgba(255,200,80,0.06)",borderRadius:10,padding:12,marginBottom:8,borderLeft:"4px solid #ffd580"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                      <div>
+                        <div style={{fontSize:14}}>{mtEmoji(m.type)} {mtLabel(m.type)}</div>
+                        <div style={{fontSize:11,color:"#aaa"}}>{m.apt==="all"?"Tutta la villa":aptEmoji(m.apt)+" "+aptLabel(m.apt)}</div>
+                        <div style={{fontSize:10,color:"#ffd580",marginTop:2}}>{fmtDate(parseDate(m.date))} · €{fmtEur(mensile)}/mese</div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:16,fontWeight:"bold",color:"#ffd580"}}>€{fmtEur(costo)}</div>
+                        <div style={{fontSize:10,color:"#666"}}>÷12 mesi</div>
+                      </div>
+                    </div>
+                    {m.notes&&<div style={{fontSize:11,color:"#aaa",fontStyle:"italic",marginTop:7}}>{m.notes}</div>}
+                    {canEdit&&<div style={{display:"flex",gap:7,marginTop:9}}>
+                      <button onClick={()=>handleMEdit(m)} style={{...S.btn("#2a2a1a","#ffd580"),flex:1,fontSize:12,padding:"7px 0"}}>Modifica</button>
+                      <button onClick={()=>setDelMId(m.id)} style={{...S.btn("#3a1a1a","#D94F5C"),flex:1,fontSize:12,padding:"7px 0"}}>Elimina</button>
+                    </div>}
+                  </div>;
+                })}
+              </div>;
+            })()}
         {view==="addCost"&&(()=>{
           const isAnnual=COST_TYPES_ANNUAL.some(t=>t.id===cForm.type);
           return<div style={{padding:"0 14px"}}>
@@ -840,8 +907,25 @@ export default function App() {
               </div>}
             </div>
             {isAnnual&&<div style={{fontSize:11,color:"#FFB347",marginBottom:10,padding:"8px 12px",background:"rgba(255,179,71,0.08)",borderRadius:8}}>💡 Costo annuale: verrà diviso per 12 nei grafici mensili (€{cForm.amount?fmtEur(parseFloat(cForm.amount)/12):"0,00"}/mese)</div>}
-            <div style={{fontSize:10,color:"#FF6B6B",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:8}}>Importo (€)</div>
-            <input type="number" value={cForm.amount} onChange={e=>setCForm(f=>({...f,amount:e.target.value}))} placeholder="0" style={S.input}/>
+            {!isAnnual&&editCId===null&&<div style={{display:"flex",gap:8,marginTop:10,marginBottom:10}}>
+              <button onClick={()=>setCSplitMode(false)} style={{flex:1,padding:"10px 0",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12,background:!cSplitMode?"#FF6B6B":"rgba(255,255,255,0.06)",color:!cSplitMode?"#1a0533":"#aaa"}}>Importo unico</button>
+              <button onClick={()=>setCSplitMode(true)} style={{flex:1,padding:"10px 0",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",fontSize:12,background:cSplitMode?"#FF6B6B":"rgba(255,255,255,0.06)",color:cSplitMode?"#1a0533":"#aaa"}}>Per appartamento</button>
+            </div>}
+            {cSplitMode&&!isAnnual&&editCId===null?(
+              <div>
+                <div style={{fontSize:11,color:"#FFB347",marginBottom:10,padding:"8px 12px",background:"rgba(255,179,71,0.08)",borderRadius:8}}>💡 Inserisci l'importo di ogni appartamento (lascia vuoto quelli che non servono). Viene creata una voce per ciascuno, con il mese e l'anno scelti sopra.</div>
+                {["zaffiro","diamante","rubino","smeraldo"].map(id=><div key={id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+                  <div style={{width:110,fontSize:12,color:aptColor(id)}}>{aptEmoji(id)} {aptLabel(id)}</div>
+                  <input type="number" value={cSplit[id]} onChange={e=>setCSplit(s=>({...s,[id]:e.target.value}))} placeholder="0" style={{...S.input,marginBottom:0}}/>
+                </div>)}
+                <div style={{textAlign:"right",fontSize:12,color:"#FF6B6B",margin:"8px 0"}}>Totale: €{fmtEur(["zaffiro","diamante","rubino","smeraldo"].reduce((s,id)=>s+(parseFloat(cSplit[id])||0),0))}</div>
+              </div>
+            ):(
+              <>
+                <div style={{fontSize:10,color:"#FF6B6B",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:8}}>Importo (€)</div>
+                <input type="number" value={cForm.amount} onChange={e=>setCForm(f=>({...f,amount:e.target.value}))} placeholder="0" style={S.input}/>
+              </>
+            )}
             <div style={{fontSize:10,color:"#FF6B6B",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:10}}>Note</div>
             <textarea value={cForm.notes} onChange={e=>setCForm(f=>({...f,notes:e.target.value}))} placeholder="Note..." rows={3} style={{...S.input,resize:"vertical",marginBottom:16}}/>
             <div style={{display:"flex",gap:8}}>
