@@ -572,7 +572,9 @@ export default function App() {
         {view==="list"&&(
           <div style={{padding:"0 12px"}}>
             <div style={{display:"flex",gap:6,marginBottom:14}}>
-              <Pill active={true} color="#C8A96E" onClick={()=>{}}>📋 Prenotazioni</Pill>
+              <Pill active={listFilter==="all"}      color="#C8A96E" onClick={()=>setListFilter("all")}>Tutto</Pill>
+              <Pill active={listFilter==="bookings"} color="#4CAF8A" onClick={()=>setListFilter("bookings")}>📋 Prenotazioni</Pill>
+              <Pill active={listFilter==="maint"}    color="#ffd580" onClick={()=>setListFilter("maint")}>🛠️ Manutenzioni</Pill>
             </div>
             {listFilter!=="maint"&&<>
               <div style={{display:"flex",gap:8,marginBottom:14}}>
@@ -620,7 +622,28 @@ export default function App() {
                   </div>
                 </div>;
               })}
-            </>
+            </>}
+            {listFilter!=="bookings"&&<>
+              {listFilter==="maint"&&<div style={{display:"flex",gap:8,marginBottom:14}}>
+                <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#ffd580"}}>{filteredMaints.length}</div><div style={{fontSize:9,color:"#999"}}>MANUT.</div></div>
+                <div style={S.card}><div style={{fontSize:18,fontWeight:"bold",color:"#D94F5C"}}>€{fmtEur(filteredMaints.reduce((s,m)=>s+(parseFloat(m.cost)||0),0))}</div><div style={{fontSize:9,color:"#999"}}>COSTO TOT.</div></div>
+              </div>}
+              {listFilter==="all"&&filteredMaints.length>0&&<div style={{fontSize:10,color:"#ffd580",letterSpacing:3,textTransform:"uppercase",margin:"16px 0 8px",borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:14}}>Manutenzioni</div>}
+              {filteredMaints.length===0&&<div style={{textAlign:"center",padding:"28px 0",color:"#666"}}>Nessuna manutenzione</div>}
+              {filteredMaints.map(m=>(
+                <div key={m.id} style={{background:"rgba(255,200,80,0.06)",borderRadius:10,padding:12,marginBottom:8,borderLeft:"4px solid #ffd580"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div><div style={{fontSize:14}}>{mtEmoji(m.type)} {mtLabel(m.type)}</div><div style={{fontSize:11,color:"#aaa"}}>{m.apt==="all"?"Tutta la villa":aptEmoji(m.apt)+" "+aptLabel(m.apt)}</div></div>
+                    <div style={{textAlign:"right"}}><div style={{fontSize:12,color:"#ffd580"}}>{fmtDate(parseDate(m.date))}</div>{m.cost&&<div style={{fontSize:12,color:"#D94F5C"}}>€{fmtEur(parseFloat(m.cost))}</div>}</div>
+                  </div>
+                  {m.notes&&<div style={{fontSize:11,color:"#aaa",fontStyle:"italic",marginTop:7}}>{m.notes}</div>}
+                  {canEdit&&<div style={{display:"flex",gap:7,marginTop:9}}>
+                    <button onClick={()=>handleMEdit(m)} style={{...S.btn("#2a2a1a","#ffd580"),flex:1,fontSize:12,padding:"7px 0"}}>Modifica</button>
+                    <button onClick={()=>setDelMId(m.id)} style={{...S.btn("#3a1a1a","#D94F5C"),flex:1,fontSize:12,padding:"7px 0"}}>Elimina</button>
+                  </div>}
+                </div>
+              ))}
+            </>}
           </div>
         )}
 
