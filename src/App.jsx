@@ -994,6 +994,69 @@ export default function App() {
               </div>
             </div>
 
+            {/* Ospiti */}
+            {(()=>{
+              const guestsOf=list=>list.reduce((s,b)=>s+(parseInt(b.guests)||0),0);
+              const totG=guestsOf(bksFilt);
+              const withG=bksFilt.filter(b=>(parseInt(b.guests)||0)>0).length;
+              const avgG=withG>0?totG/withG:0;
+              const missing=bksFilt.length-withG;
+              const byApt=apts.map(a=>({a,g:guestsOf(bksFilt.filter(b=>b.apt===a.id))})).filter(r=>r.g>0);
+              const byMonth=Array.from({length:12},(_,mi)=>guestsOf(filterBks({year:statsYear,month:mi,aptIds:statsApts})));
+              return<div style={{background:"rgba(255,179,71,0.06)",border:"1px solid rgba(255,179,71,0.25)",borderRadius:11,padding:14,marginBottom:14}}>
+                <div style={{fontSize:10,color:"#FFB347",letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>👥 Ospiti — {periodLabel}</div>
+                <div style={{display:"flex",gap:8,marginBottom:10}}>
+                  <div style={S.card}><div style={{fontSize:20,fontWeight:"bold",color:"#FFB347"}}>{totG}</div><div style={{fontSize:9,color:"#999"}}>OSPITI TOTALI</div></div>
+                  <div style={S.card}><div style={{fontSize:20,fontWeight:"bold",color:"#C8A96E"}}>{avgG>0?avgG.toFixed(1):"—"}</div><div style={{fontSize:9,color:"#999"}}>Ø OSPITI/PREN.</div></div>
+                  <div style={S.card}><div style={{fontSize:20,fontWeight:"bold",color:"#aaa"}}>{bksFilt.length}</div><div style={{fontSize:9,color:"#999"}}>PRENOTAZIONI</div></div>
+                </div>
+                {missing>0&&<div style={{fontSize:10,color:"#888",fontStyle:"italic",marginBottom:8}}>{missing} prenotazioni senza numero ospiti (non conteggiate)</div>}
+                {byApt.length>1&&<div style={{marginBottom:10}}>
+                  {byApt.map(r=><div key={r.a.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 0"}}>
+                    <span style={{fontSize:12,color:r.a.color}}>{r.a.emoji} {r.a.name}</span>
+                    <span style={{fontSize:13,fontWeight:"bold"}}>{r.g}</span>
+                  </div>)}
+                </div>}
+                {statsMonth===null&&<div>
+                  <div style={{fontSize:10,color:"#999",letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Per mese (tocca per selezionare)</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:6}}>
+                    {byMonth.map((g,i)=><div key={i} onClick={()=>setStatsMonth(i)} style={{textAlign:"center",padding:"6px 0",borderRadius:7,background:"rgba(255,255,255,0.05)",cursor:"pointer"}}>
+                      <div style={{fontSize:9,color:"#999"}}>{MONTHS_SHORT[i]}</div>
+                      <div style={{fontSize:13,fontWeight:"bold",color:g>0?"#f0e6d3":"#444"}}>{g}</div>
+                    </div>)}
+                  </div>
+                </div>}
+              </div>;
+            })()}
+
+            {/* Ospiti che ritornano */}
+            {(()=>{
+              const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9àèéìòù ]/g," ").split(/\s+/).filter(Boolean).sort().join(" ");
+              const groups={};
+              bookings.forEach(b=>{const k=norm(b.guest);if(!k)return;(groups[k]=groups[k]||[]).push(b);});
+              const returning=Object.values(groups).filter(g=>g.length>1).map(g=>{
+                const list=[...g].sort((x,y)=>x.checkin.localeCompare(y.checkin));
+                let real=0;
+                for(let i=1;i<list.length;i++){if(list[i].checkin!==list[i-1].checkout)real++;}
+                return{name:list[0].guest.trim(),list,real};
+              }).sort((x,y)=>(y.real-x.real)||(y.list.length-x.list.length));
+              const realCount=returning.filter(r=>r.real>0).length;
+              const consCount=returning.length-realCount;
+              return<div style={{background:"rgba(76,175,138,0.06)",border:"1px solid rgba(76,175,138,0.25)",borderRadius:11,padding:14,marginBottom:14}}>
+                <div style={{fontSize:10,color:"#4CAF8A",letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>🔁 Ospiti che ritornano</div>
+                <div style={{fontSize:11,color:"#999",marginBottom:10}}>Ritorni veri: {realCount} · Soggiorni consecutivi: {consCount}</div>
+                {returning.length===0&&<div style={{textAlign:"center",padding:"10px 0",color:"#666",fontSize:12}}>Nessun ospite ripetuto tra le prenotazioni</div>}
+                {returning.map(r=><div key={r.name+r.list[0].id} style={{padding:"8px 0",borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <span style={{fontSize:13,fontWeight:"bold"}}>{r.name} <span style={{fontSize:10,color:"#999",fontWeight:"normal"}}>({r.list.length} prenotazioni)</span></span>
+                    <span style={{fontSize:10,padding:"2px 8px",borderRadius:8,background:r.real>0?"rgba(76,175,138,0.2)":"rgba(255,255,255,0.08)",color:r.real>0?"#4CAF8A":"#aaa"}}>{r.real>0?"Ritorno":"Consecutivo"}</span>
+                  </div>
+                  {r.list.map(s=><div key={s.id} style={{fontSize:11,color:"#aaa"}}>{fmtDate(parseDate(s.checkin))} → {fmtDate(parseDate(s.checkout))} · {aptEmoji(s.apt)} {aptLabel(s.apt)}</div>)}
+                </div>)}
+                <div style={{fontSize:10,color:"#666",fontStyle:"italic",marginTop:8}}>Il confronto è sul nome: due persone con lo stesso nome risultano la stessa. "Consecutivo" = il check-in coincide con il check-out precedente (di solito è lo stesso soggiorno prolungato o spostato).</div>
+              </div>;
+            })()}
+
             {/* Storico */}
             {(()=>{
               const allBks=(isAll?bookings:bookings.filter(b=>statsApts.includes(b.apt))).filter(b=>b.checkin>=ATTIVITA_START);
