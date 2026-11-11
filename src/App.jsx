@@ -71,6 +71,7 @@ const todayISO = () => toISO(new Date());
 const daysInMonth = (y,m) => new Date(y,m+1,0).getDate();
 const bkYear  = b => { const c=parseDate(b.checkout); return c?c.getFullYear():null; };
 const bkMonth = b => { const c=parseDate(b.checkout); return c?c.getMonth():null; };
+const normName = s => String(s||"").toLowerCase().replace(/[^a-z0-9àèéìòù ]/g," ").split(/\s+/).filter(Boolean).sort().join(" ");
 const emptyForm  = () => ({ apt:DEFAULT_APARTMENTS[0].id, guest:"", checkin:"", checkout:"", price:"", guests:"", notes:"", platform:"diretto", status:"confirmed", createdAt:"" });
 const emptyMForm = () => ({ apt:"all", type:"garden", date:"", notes:"", cost:"", isAnnual:false });
 const emptyCForm = () => ({ apt:"all", type:"energia", year:new Date().getFullYear(), month:new Date().getMonth(), amount:"", notes:"", isAnnual:false });
@@ -146,6 +147,7 @@ export default function App() {
   const [hideAmounts, setHideAmounts] = useState(false);
   const [listFilter, setListFilter]   = useState("all");
   const [expandedCostCat, setExpandedCostCat] = useState(null);
+  const [showReturning, setShowReturning] = useState(false);
   const [costsYear, setCostsYear]     = useState(new Date().getFullYear());
   const [costsMonth, setCostsMonth]   = useState(new Date().getMonth());
   const [energyApt, setEnergyApt]     = useState("all");
@@ -1233,6 +1235,25 @@ export default function App() {
             <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>{apts.map(a=><Pill key={a.id} active={form.apt===a.id} color={a.color} onClick={()=>setForm(f=>({...f,apt:a.id}))}>{a.emoji} {a.name}</Pill>)}</div>
             <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Nome Ospite</div>
             <input value={form.guest} onChange={e=>setForm(f=>({...f,guest:e.target.value}))} placeholder="Nome e cognome" style={S.input}/>
+            {(()=>{
+              const k=normName(form.guest);
+              if(k.length<3) return null;
+              const prev=bookings.filter(b=>b.id!==editId&&normName(b.guest)===k).sort((x,y)=>x.checkin.localeCompare(y.checkin));
+              if(prev.length===0) return null;
+              const ci=form.checkin,co=form.checkout;
+              let hint="";
+              if(ci&&co){
+                if(prev.some(b=>ci<b.checkout&&co>b.checkin)) hint="Date in comune con una sua prenotazione: sembra un prenotante con più appartamenti.";
+                else if(prev.some(b=>ci===b.checkout||co===b.checkin)) hint="Date consecutive a una sua prenotazione: sembra un prolungamento del soggiorno.";
+                else hint="Date diverse dalle precedenti: sarebbe un ospite che ritorna.";
+              }
+              return<div style={{background:"rgba(255,179,71,0.1)",border:"1px solid rgba(255,179,71,0.4)",borderRadius:8,padding:"8px 12px",margin:"4px 0 8px"}}>
+                <div style={{fontSize:12,color:"#FFB347",fontWeight:"bold"}}>⚠️ Nome già registrato ({prev.length} {prev.length===1?"prenotazione":"prenotazioni"})</div>
+                {prev.slice(-3).map(b=><div key={b.id} style={{fontSize:11,color:"#ccc"}}>{fmtDate(parseDate(b.checkin))} → {fmtDate(parseDate(b.checkout))} · {aptEmoji(b.apt)} {aptLabel(b.apt)}</div>)}
+                {prev.length>3&&<div style={{fontSize:10,color:"#888"}}>… e altre {prev.length-3} precedenti</div>}
+                {hint&&<div style={{fontSize:11,color:"#FFB347",marginTop:4,fontStyle:"italic"}}>{hint}</div>}
+              </div>;
+            })()}
             <div style={{display:"flex",gap:8}}>
               <div style={{flex:1}}><div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:10}}>Check-in</div><input type="date" value={form.checkin} onChange={e=>setForm(f=>({...f,checkin:e.target.value}))} style={S.input}/></div>
               <div style={{flex:1}}><div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6,marginTop:10}}>Check-out</div><input type="date" value={form.checkout} onChange={e=>setForm(f=>({...f,checkout:e.target.value}))} style={S.input}/></div>
