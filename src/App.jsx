@@ -1355,6 +1355,7 @@ export default function App() {
             <div style={{fontSize:10,color:"#C8A96E",letterSpacing:2,textTransform:"uppercase",marginBottom:6}}>Cambia PIN Admin</div>
             <input type="password" inputMode="numeric" maxLength={6} value={newPin} onChange={e=>setNewPin(e.target.value)} placeholder="Nuovo PIN (min. 4 cifre)" style={S.input}/>
             <div style={{fontSize:10,color:"#666",marginBottom:18}}>Lascia vuoto per mantenere il PIN attuale</div>
+            <div style={{fontSize:10,color:"#4CAF8A",textAlign:"center",marginBottom:14}}>Versione 13/11/2026 · ospiti v2</div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setView("calendar")} style={{...S.btn("#1a1a2e","#888"),flex:1,padding:"12px 0"}}>Annulla</button>
               <button onClick={handleSaveSettings} style={{...S.btn("#1a3a2a","#4CAF8A"),flex:2,padding:"12px 0",fontWeight:"bold"}}>Salva</button>
